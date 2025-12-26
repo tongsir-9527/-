@@ -12,9 +12,11 @@ enum class BuildingType {
 enum class ResourceType {
     GOLD,
     ELIXIR,
-    DARK_ELIXIR
-};
+    DARK_ELIXIR，
 
+};
+static const int GOLD_MINE_CONSUME = 100;       // 金矿建造消耗
+static const int ELIXIR_COLLECTOR_CONSUME = 80; // 圣水收集器建造消耗
 class Architecture : public cocos2d::Sprite
 {
 public:

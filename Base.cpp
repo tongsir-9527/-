@@ -18,7 +18,7 @@ bool Base::init()
 
     auto visibleSize = Director::getInstance()->getVisibleSize();
     Vec2 origin = Director::getInstance()->getVisibleOrigin();
-    scaleFactor = 1.0f; // 初始缩放为1倍
+    scaleFactor = 1.0f;
     isDragging = false;
 
     // 添加背景图
@@ -26,7 +26,6 @@ bool Base::init()
     if (background)
     {
         background->setAnchorPoint(Vec2::ANCHOR_MIDDLE);
-        // 初始位置设为屏幕中心
         backgroundPos = Vec2(visibleSize.width / 2 + origin.x, visibleSize.height / 2 + origin.y);
         background->setPosition(backgroundPos);
         background->setScale(scaleFactor);
@@ -39,14 +38,14 @@ bool Base::init()
         origin.y + visibleSize.height - label->getContentSize().height));
     this->addChild(label, 1);
 
-    // 添加返回按钮
+    // 添加返回按钮（提高层级避免被遮挡）
     auto backButton = Button::create("BackButton.png");
     if (backButton)
     {
         backButton->setPosition(Vec2(origin.x + backButton->getContentSize().width / 2 + 20,
             origin.y + visibleSize.height - backButton->getContentSize().height / 2 - 20));
         backButton->addClickEventListener(CC_CALLBACK_1(Base::menuBackCallback, this));
-        this->addChild(backButton, 1);
+        this->addChild(backButton, 4); // 提高层级到4，确保在遮罩上方
     }
 
     // 添加关闭按钮
@@ -54,7 +53,7 @@ bool Base::init()
         "CloseNormal.png",
         "CloseSelected.png",
         CC_CALLBACK_1(Base::menuCloseCallback, this));
-
+    closeItem->setTag(999);
     if (closeItem)
     {
         float x = origin.x + visibleSize.width - closeItem->getContentSize().width / 2;
@@ -79,34 +78,74 @@ bool Base::init()
     _elixir = 0;
     _darkElixir = 0;
 
-    // 创建司令部(决定其他建筑等级上限)
+    // 初始化指挥中心
     _commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
     if (_commandCenter) {
         _commandCenter->setPosition(Vec2(visibleSize.width / 2, visibleSize.height / 2));
         this->addChild(_commandCenter, 1);
     }
 
-    // 创建金矿
-    auto goldMine = Architecture::create(BuildingType::GOLD_MINE, 1);
-    if (goldMine) {
-        goldMine->setPosition(Vec2(visibleSize.width / 3, visibleSize.height / 2));
-        goldMine->setResourceCallback([this](ResourceType type, int amount) {
-            _gold += amount;
-            CCLOG("Gold: %d", _gold);  // 打印资源变化
-            });
-        this->addChild(goldMine, 1);
+    // 添加商店按钮
+    _storeButton = Button::create("StoreButton.png");
+    if (_storeButton) {
+        float btnX = origin.x + visibleSize.width - _storeButton->getContentSize().width / 2 - 20;
+        float btnY = origin.y + _storeButton->getContentSize().height / 2 + 20;
+        _storeButton->setPosition(Vec2(btnX, btnY));
+        _storeButton->addClickEventListener(CC_CALLBACK_1(Base::onStoreButtonClicked, this));
+        this->addChild(_storeButton, 2);
     }
 
-    // 创建圣水收集器
-    auto elixirCollector = Architecture::create(BuildingType::ELIXIR_COLLECTOR, 1);
-    if (elixirCollector) {
-        elixirCollector->setPosition(Vec2(visibleSize.width * 2 / 3, visibleSize.height / 2));
-        elixirCollector->setResourceCallback([this](ResourceType type, int amount) {
-            _elixir += amount;
-            CCLOG("Elixir: %d", _elixir);  // 打印资源变化
-            });
-        this->addChild(elixirCollector, 1);
-    }
+    // 初始化商店面板(默认隐藏)
+    _isStoreOpen = false;
+    _storePanel = Layer::create();
+    _storePanel->setVisible(false);
+    this->addChild(_storePanel, 3);
+
+    // 商店面板高度(屏幕的30%)
+    float panelHeight = visibleSize.height * 0.3f;
+
+    // 商店面板背景
+    auto panelBg = LayerColor::create(Color4B(50, 50, 50, 200), visibleSize.width, panelHeight);
+    panelBg->setPosition(Vec2(0, 0));
+    _storePanel->addChild(panelBg);
+
+    // 创建上70%区域的遮罩(修复关闭逻辑)
+    auto mask = LayerColor::create(Color4B(0, 0, 0, 100));
+    mask->setContentSize(Size(visibleSize.width, visibleSize.height - panelHeight));
+    mask->setPosition(Vec2(0, panelHeight)); // 定位在商店面板上方
+
+    auto maskListener = EventListenerTouchOneByOne::create();
+    maskListener->setSwallowTouches(true);
+    maskListener->onTouchBegan = [this, mask](Touch* touch, Event* event) {
+        // 检查点击是否在遮罩范围内
+        Vec2 touchLocation = touch->getLocation();
+        Vec2 maskLocation = mask->convertToNodeSpace(touchLocation);
+        Rect maskRect = Rect(0, 0, mask->getContentSize().width, mask->getContentSize().height);
+
+        if (maskRect.containsPoint(maskLocation)) {
+            toggleStorePanel();
+            return true;
+        }
+        return false;
+        };
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, mask);
+    _storePanel->addChild(mask);
+
+    // 创建建筑选择滚动视图
+    _buildingScrollView = ScrollView::create();
+    _buildingScrollView->setContentSize(Size(visibleSize.width, panelHeight));
+    _buildingScrollView->setPosition(Vec2(0, 0));
+    _buildingScrollView->setDirection(ScrollView::Direction::HORIZONTAL);
+    _storePanel->addChild(_buildingScrollView);
+
+    // 添加建筑图标到滚动视图
+    initBuildingScrollContent();
+
+    // 给滚动视图添加触摸事件防止事件穿透
+    auto scrollListener = EventListenerTouchOneByOne::create();
+    scrollListener->setSwallowTouches(true);
+    scrollListener->onTouchBegan = [](Touch* touch, Event* event) { return true; };
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(scrollListener, _buildingScrollView);
 
     return true;
 }
@@ -125,7 +164,6 @@ void Base::menuBackCallback(Ref* pSender)
     }
 }
 
-// 修改鼠标滚轮事件处理（反转缩放逻辑）
 bool Base::onMouseScroll(Event* event)
 {
     EventMouse* e = static_cast<EventMouse*>(event);
@@ -133,29 +171,25 @@ bool Base::onMouseScroll(Event* event)
 
     float scrollY = e->getScrollY();
 
-    // 反转原有的缩放逻辑：向上滚动缩小，向下滚动放大
     if (scrollY > 0)
     {
-        scaleFactor *= 0.9f;  // 原先是乘以1.1f（放大），现在改为缩小
-        if (scaleFactor < 1.0f) // 最小1倍
+        scaleFactor *= 0.9f;
+        if (scaleFactor < 1.0f)
             scaleFactor = 1.0f;
     }
     else if (scrollY < 0)
     {
-        scaleFactor *= 1.1f;  // 原先是乘以0.9f（缩小），现在改为放大
-        if (scaleFactor > 3.0f) // 最大3倍
+        scaleFactor *= 1.1f;
+        if (scaleFactor > 3.0f)
             scaleFactor = 3.0f;
     }
 
     background->setScale(scaleFactor);
-
-    // 缩放后检查并修正位置，确保背景不超出范围
     constrainBackgroundPosition();
 
     return true;
 }
 
-// 修改鼠标移动事件处理（添加边界限制）
 bool Base::onMouseMove(Event* event)
 {
     if (!isDragging || !background) return false;
@@ -164,22 +198,15 @@ bool Base::onMouseMove(Event* event)
     Vec2 currentMousePos = Vec2(e->getCursorX(), e->getCursorY());
     Vec2 delta = currentMousePos - lastMousePos;
 
-    // 临时计算新位置
     Vec2 newPos = backgroundPos + delta;
-
-    // 保存当前位置，用于约束检查
     backgroundPos = newPos;
-
-    // 约束背景位置，确保不超出游戏界面范围
     constrainBackgroundPosition();
-
-    // 更新背景位置
     background->setPosition(backgroundPos);
 
     lastMousePos = currentMousePos;
     return true;
 }
-// 约束背景位置不超出游戏界面范围
+
 void Base::constrainBackgroundPosition()
 {
     if (!background) return;
@@ -187,47 +214,54 @@ void Base::constrainBackgroundPosition()
     auto visibleSize = Director::getInstance()->getVisibleSize();
     Vec2 origin = Director::getInstance()->getVisibleOrigin();
 
-    // 背景图原始尺寸（base_background.png的实际像素大小）
     const float originalBgWidth = 1824.0f;
     const float originalBgHeight = 1398.0f;
 
-    // 计算缩放后的背景图尺寸
     float scaledBgWidth = originalBgWidth * scaleFactor;
     float scaledBgHeight = originalBgHeight * scaleFactor;
 
-    // 游戏界面的实际可视范围（以origin为起点）
     float gameMinX = origin.x;
     float gameMaxX = origin.x + visibleSize.width;
     float gameMinY = origin.y;
     float gameMaxY = origin.y + visibleSize.height;
 
-    // 计算背景图允许的最大拖动范围（确保背景边缘不超出游戏界面）
-    // 背景图锚点为中心，所以边界需要基于中心位置计算
-    float minX = gameMinX + scaledBgWidth / 2;   // 左边界（背景中心最大左移位置）
-    float maxX = gameMaxX - scaledBgWidth / 2;   // 右边界（背景中心最大右移位置）
-    float minY = gameMinY + scaledBgHeight / 2;  // 下边界（背景中心最大下移位置）
-    float maxY = gameMaxY - scaledBgHeight / 2;  // 上边界（背景中心最大上移位置）
+    float minX = gameMinX + scaledBgWidth / 2;
+    float maxX = gameMaxX - scaledBgWidth / 2;
+    float minY = gameMinY + scaledBgHeight / 2;
+    float maxY = gameMaxY - scaledBgHeight / 2;
 
-    // 限制背景图中心位置在计算出的范围内
     backgroundPos.x = clampf(backgroundPos.x, minX, maxX);
     backgroundPos.y = clampf(backgroundPos.y, minY, maxY);
-
-    // 应用限制后的位置
     background->setPosition(backgroundPos);
 }
 
-// 鼠标按下处理（开始拖动）
 bool Base::onMouseDown(Event* event)
 {
     EventMouse* e = static_cast<EventMouse*>(event);
     if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_LEFT)
     {
+        // 获取鼠标位置，转换为UI坐标系
+        Vec2 mousePos = this->convertToNodeSpace(Vec2(e->getCursorX(), e->getCursorY()));
+
+        // 检查是否点击商店按钮
+        if (_storeButton && _storeButton->getBoundingBox().containsPoint(mousePos)) {
+            onStoreButtonClicked(_storeButton);
+            return true;
+        }
+
+        // 检查是否点击关闭按钮
+        auto closeItem = this->getChildByTag(999);
+        if (closeItem && closeItem->getBoundingBox().containsPoint(mousePos)) {
+            menuCloseCallback(closeItem);
+            return true;
+        }
+
         isDragging = true;
-        lastMousePos = Vec2(e->getCursorX(), e->getCursorY());
+        lastMousePos = mousePos;
     }
     return true;
 }
-// 鼠标释放处理（结束拖动）
+
 bool Base::onMouseUp(Event* event)
 {
     EventMouse* e = static_cast<EventMouse*>(event);
@@ -236,4 +270,169 @@ bool Base::onMouseUp(Event* event)
         isDragging = false;
     }
     return true;
+}
+
+// 商店初始化实现
+void Base::initBuildingScrollContent() {
+    const float spacing = 20.0f;
+    const float buildingIconSize = 100.0f;
+
+    std::vector<std::pair<BuildingType, std::string>> buildings = {
+        {BuildingType::GOLD_MINE, "GoldMine.png"},
+        {BuildingType::ELIXIR_COLLECTOR, "ElixirCollector.png"},
+        // 可以添加更多建筑
+    };
+
+    _scrollContentWidth = buildings.size() * (buildingIconSize + spacing) - spacing;
+
+    auto contentLayer = Layer::create();
+    contentLayer->setContentSize(Size(_scrollContentWidth, _buildingScrollView->getContentSize().height));
+    _buildingScrollView->addChild(contentLayer);
+    _buildingScrollView->setInnerContainerSize(contentLayer->getContentSize());
+
+    for (size_t i = 0; i < buildings.size(); ++i) {
+        auto buildingBtn = Button::create(buildings[i].second);
+        buildingBtn->setScale(buildingIconSize / buildingBtn->getContentSize().width);
+        buildingBtn->setPosition(Vec2(
+            i * (buildingIconSize + spacing) + buildingIconSize / 2,
+            _buildingScrollView->getContentSize().height / 2
+        ));
+
+        buildingBtn->setTag(static_cast<int>(buildings[i].first));
+        buildingBtn->addClickEventListener(CC_CALLBACK_1(Base::onBuildingSelected, this));
+        contentLayer->addChild(buildingBtn);
+    }
+}
+
+void Base::onStoreButtonClicked(Ref* sender) {
+    toggleStorePanel();
+}
+
+void Base::toggleStorePanel() {
+    _isStoreOpen = !_isStoreOpen;
+
+    if (_isStoreOpen) {
+        _storePanel->setVisible(true);
+        _storePanel->setPositionY(-_buildingScrollView->getContentSize().height);
+        _storePanel->runAction(MoveTo::create(0.3f, Vec2::ZERO));
+    }
+    else {
+        _storePanel->runAction(Sequence::create(
+            MoveTo::create(0.3f, Vec2(0, -_buildingScrollView->getContentSize().height)),
+            CallFunc::create([this]() {
+                _storePanel->setVisible(false);
+                }),
+            nullptr
+        ));
+    }
+}
+
+bool Base::onScrollTouchBegan(Touch* touch, Event* event) {
+    Vec2 touchLocation = touch->getLocation();
+    Vec2 scrollLocation = _buildingScrollView->convertToNodeSpace(touchLocation);
+    Rect scrollRect = Rect(0, 0, _buildingScrollView->getContentSize().width, _buildingScrollView->getContentSize().height);
+
+    if (scrollRect.containsPoint(scrollLocation)) {
+        _scrollStartPos = touchLocation;
+        return true;
+    }
+    return false;
+}
+
+bool Base::onScrollTouchMoved(Touch* touch, Event* event) {
+    Vec2 currentPos = touch->getLocation();
+    Vec2 delta = currentPos - _scrollStartPos;
+
+    Vec2 innerPos = _buildingScrollView->getInnerContainerPosition();
+    _buildingScrollView->setInnerContainerPosition(Vec2(innerPos.x + delta.x, innerPos.y));
+
+    _scrollStartPos = currentPos;
+    return true;
+}
+
+bool Base::onScrollTouchEnded(Touch* touch, Event* event) {
+    return true;
+}
+
+void Base::onBuildingSelected(Ref* sender) {
+    Button* buildingBtn = dynamic_cast<Button*>(sender);
+    if (!buildingBtn) return;
+
+    BuildingType type = static_cast<BuildingType>(buildingBtn->getTag());
+    bool canBuild = false;
+    std::string errorMsg;
+
+    // 检查资源是否足够
+    switch (type) {
+        case BuildingType::GOLD_MINE:
+            if (_gold >= GOLD_MINE_CONSUME) {
+                canBuild = true;
+                _gold -= GOLD_MINE_CONSUME;
+            }
+            else {
+                errorMsg = "建造失败，黄金资源不足";
+            }
+            break;
+        case BuildingType::ELIXIR_COLLECTOR:
+            if (_elixir >= ELIXIR_COLLECTOR_CONSUME) {
+                canBuild = true;
+                _elixir -= ELIXIR_COLLECTOR_CONSUME;
+            }
+            else {
+                errorMsg = "建造失败，圣水资源不足";
+            }
+            break;
+        default:
+            errorMsg = "未知错误";
+            break;
+    }
+
+    // 资源不足时显示提示（修复显示问题）
+    if (!canBuild) {
+        auto visibleSize = Director::getInstance()->getVisibleSize();
+        auto origin = Director::getInstance()->getVisibleOrigin();
+
+        auto label = Label::createWithTTF(errorMsg, "fonts/Marker Felt.ttf", 36);
+        label->setPosition(Vec2(origin.x + visibleSize.width / 2,
+            origin.y + visibleSize.height / 2));
+        label->setColor(Color3B::RED);
+        this->addChild(label, 100); // 大幅提高层级确保可见
+
+        // 2秒后自动移除提示
+        label->runAction(Sequence::create(
+            DelayTime::create(2.0f),
+            FadeOut::create(0.5f),
+            RemoveSelf::create(),
+            nullptr
+        ));
+        return;
+    }
+
+    // 资源足够时创建建筑
+    Vec2 visibleCenter = Director::getInstance()->getVisibleSize() / 2;
+    Architecture* newBuilding = Architecture::create(type, 1);
+
+    if (newBuilding) {
+        float randomX = visibleCenter.x + (rand() % 200 - 100);
+        float randomY = visibleCenter.y + (rand() % 200 - 100);
+
+        newBuilding->setPosition(Vec2(randomX, randomY));
+
+        if (type == BuildingType::GOLD_MINE) {
+            newBuilding->setResourceCallback([this](ResourceType resType, int amount) {
+                _gold += amount;
+                CCLOG("Gold: %d", _gold);
+                });
+        }
+        else if (type == BuildingType::ELIXIR_COLLECTOR) {
+            newBuilding->setResourceCallback([this](ResourceType resType, int amount) {
+                _elixir += amount;
+                CCLOG("Elixir: %d", _elixir);
+                });
+        }
+
+        this->addChild(newBuilding, 1);
+    }
+
+    toggleStorePanel();
 }
