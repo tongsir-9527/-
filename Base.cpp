@@ -125,7 +125,7 @@ void Base::menuBackCallback(Ref* pSender)
     }
 }
 
-// 鼠标滚轮缩放处理（向上滚放大，向下滚缩小，范围1-3倍）
+// 修改鼠标滚轮事件处理（反转缩放逻辑）
 bool Base::onMouseScroll(Event* event)
 {
     EventMouse* e = static_cast<EventMouse*>(event);
@@ -133,23 +133,87 @@ bool Base::onMouseScroll(Event* event)
 
     float scrollY = e->getScrollY();
 
-    // 向上滚动放大
+    // 反转原有的缩放逻辑：向上滚动缩小，向下滚动放大
     if (scrollY > 0)
     {
-        scaleFactor *= 1.1f;
-        if (scaleFactor > 3.0f) // 最大3倍
-            scaleFactor = 3.0f;
-    }
-    // 向下滚动缩小
-    else if (scrollY < 0)
-    {
-        scaleFactor *= 0.9f;
+        scaleFactor *= 0.9f;  // 原先是乘以1.1f（放大），现在改为缩小
         if (scaleFactor < 1.0f) // 最小1倍
             scaleFactor = 1.0f;
     }
+    else if (scrollY < 0)
+    {
+        scaleFactor *= 1.1f;  // 原先是乘以0.9f（缩小），现在改为放大
+        if (scaleFactor > 3.0f) // 最大3倍
+            scaleFactor = 3.0f;
+    }
 
     background->setScale(scaleFactor);
+
+    // 缩放后检查并修正位置，确保背景不超出范围
+    constrainBackgroundPosition();
+
     return true;
+}
+
+// 修改鼠标移动事件处理（添加边界限制）
+bool Base::onMouseMove(Event* event)
+{
+    if (!isDragging || !background) return false;
+
+    EventMouse* e = static_cast<EventMouse*>(event);
+    Vec2 currentMousePos = Vec2(e->getCursorX(), e->getCursorY());
+    Vec2 delta = currentMousePos - lastMousePos;
+
+    // 临时计算新位置
+    Vec2 newPos = backgroundPos + delta;
+
+    // 保存当前位置，用于约束检查
+    backgroundPos = newPos;
+
+    // 约束背景位置，确保不超出游戏界面范围
+    constrainBackgroundPosition();
+
+    // 更新背景位置
+    background->setPosition(backgroundPos);
+
+    lastMousePos = currentMousePos;
+    return true;
+}
+// 约束背景位置不超出游戏界面范围
+void Base::constrainBackgroundPosition()
+{
+    if (!background) return;
+
+    auto visibleSize = Director::getInstance()->getVisibleSize();
+    Vec2 origin = Director::getInstance()->getVisibleOrigin();
+
+    // 背景图原始尺寸（base_background.png的实际像素大小）
+    const float originalBgWidth = 1824.0f;
+    const float originalBgHeight = 1398.0f;
+
+    // 计算缩放后的背景图尺寸
+    float scaledBgWidth = originalBgWidth * scaleFactor;
+    float scaledBgHeight = originalBgHeight * scaleFactor;
+
+    // 游戏界面的实际可视范围（以origin为起点）
+    float gameMinX = origin.x;
+    float gameMaxX = origin.x + visibleSize.width;
+    float gameMinY = origin.y;
+    float gameMaxY = origin.y + visibleSize.height;
+
+    // 计算背景图允许的最大拖动范围（确保背景边缘不超出游戏界面）
+    // 背景图锚点为中心，所以边界需要基于中心位置计算
+    float minX = gameMinX + scaledBgWidth / 2;   // 左边界（背景中心最大左移位置）
+    float maxX = gameMaxX - scaledBgWidth / 2;   // 右边界（背景中心最大右移位置）
+    float minY = gameMinY + scaledBgHeight / 2;  // 下边界（背景中心最大下移位置）
+    float maxY = gameMaxY - scaledBgHeight / 2;  // 上边界（背景中心最大上移位置）
+
+    // 限制背景图中心位置在计算出的范围内
+    backgroundPos.x = clampf(backgroundPos.x, minX, maxX);
+    backgroundPos.y = clampf(backgroundPos.y, minY, maxY);
+
+    // 应用限制后的位置
+    background->setPosition(backgroundPos);
 }
 
 // 鼠标按下处理（开始拖动）
@@ -163,24 +227,6 @@ bool Base::onMouseDown(Event* event)
     }
     return true;
 }
-
-// 鼠标移动处理（拖动过程）
-bool Base::onMouseMove(Event* event)
-{
-    if (!isDragging || !background) return false;
-
-    EventMouse* e = static_cast<EventMouse*>(event);
-    Vec2 currentMousePos = Vec2(e->getCursorX(), e->getCursorY());
-    Vec2 delta = currentMousePos - lastMousePos;
-
-    // 更新背景位置（正向移动，与鼠标拖动方向一致）
-    backgroundPos += delta;
-    background->setPosition(backgroundPos);
-
-    lastMousePos = currentMousePos;
-    return true;
-}
-
 // 鼠标释放处理（结束拖动）
 bool Base::onMouseUp(Event* event)
 {

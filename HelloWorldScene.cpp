@@ -95,17 +95,17 @@ bool HelloWorld::init()
     }
     else
     {
-        // 设置按钮位置（屏幕下方偏中，避开封面图）
+        // 设置按钮位置（屏幕下方偏中）
         startButton->setPosition(Vec2(origin.x + visibleSize.width / 2,
             origin.y + visibleSize.height / 4));
 
-        // 绑定点击事件：点击后跳转到 Base 场景
+        // 点击后跳转到 Base 场景
         startButton->addClickEventListener([](Ref* sender) {
-            // 创建 Base 场景（需确保 Base 场景已实现 create 方法）
+            // 创建 Base 场景
             auto baseScene = Base::createScene();
             if (baseScene)
             {
-                // 场景切换（带淡入淡出动画，时长 0.5 秒）
+                // 场景切换，时间0.5秒
                 Director::getInstance()->replaceScene(TransitionFade::create(0.5f, baseScene));
             }
             });

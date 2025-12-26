@@ -26,6 +26,7 @@ private:
     bool isDragging;
     cocos2d::Vec2 lastMousePos;
     cocos2d::Vec2 backgroundPos;
+    void constrainBackgroundPosition();
 
     // 资源变量
     int _gold;
