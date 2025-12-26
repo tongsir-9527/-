@@ -1,7 +1,8 @@
 #include "HelloWorldScene.h"
 #include "SimpleAudioEngine.h"
 #include "ui/CocosGUI.h"
-USING_NS_CC;
+#include "Base.h"
+USING_NS_CC;//相当于using namespace std，这样就不用输入cocos2d::了
 
 Scene* HelloWorld::createScene()
 {
@@ -15,7 +16,7 @@ static void problemLoading(const char* filename)
     printf("Depending on how you compiled you might have to add 'Resources/' in front of filenames in HelloWorldScene.cpp\n");
 }
 
-// on "init" you need to initialize your instance
+//初始化界面函数
 bool HelloWorld::init()
 {
     //////////////////////////////
@@ -76,7 +77,7 @@ bool HelloWorld::init()
     auto sprite = Sprite::create("ClashOfClansCover.png");
     if (sprite == nullptr)
     {
-        problemLoading("'HelloWorld.png'");
+        problemLoading("'ClashOfClansCover.png'");
     }
     else
     {
@@ -85,6 +86,32 @@ bool HelloWorld::init()
 
         // add the sprite as a child to this layer
         this->addChild(sprite, 0);
+    }
+// 开始游戏按钮
+    auto startButton = ui::Button::create("StartGame.png");
+    if (startButton == nullptr)
+    {
+        problemLoading("'StartGame.png'");
+    }
+    else
+    {
+        // 设置按钮位置（屏幕下方偏中，避开封面图）
+        startButton->setPosition(Vec2(origin.x + visibleSize.width / 2,
+            origin.y + visibleSize.height / 4));
+
+        // 绑定点击事件：点击后跳转到 Base 场景
+        startButton->addClickEventListener([](Ref* sender) {
+            // 创建 Base 场景（需确保 Base 场景已实现 create 方法）
+            auto baseScene = Base::createScene();
+            if (baseScene)
+            {
+                // 场景切换（带淡入淡出动画，时长 0.5 秒）
+                Director::getInstance()->replaceScene(TransitionFade::create(0.5f, baseScene));
+            }
+            });
+
+        // 将按钮添加到场景中
+        this->addChild(startButton, 1); // zOrder 设为 1，确保在封面图上方显示
     }
     return true;
 }
@@ -99,6 +126,5 @@ void HelloWorld::menuCloseCallback(Ref* pSender)
 
     //EventCustom customEndEvent("game_scene_close_event");
     //_eventDispatcher->dispatchEvent(&customEndEvent);
-
 
 }
