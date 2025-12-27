@@ -4,6 +4,7 @@
 #include "cocos2d.h"
 #include "ui/CocosGUI.h"
 #include "Architecture.h"
+#include "Store.h"
 
 class Base : public cocos2d::Scene
 {
@@ -13,19 +14,21 @@ public:
     void menuCloseCallback(cocos2d::Ref* pSender);
     void menuBackCallback(cocos2d::Ref* pSender);
 
-    //鼠标处理方法
+    // 鼠标事件
     bool onMouseScroll(cocos2d::Event* event);
     bool onMouseDown(cocos2d::Event* event);
     bool onMouseMove(cocos2d::Event* event);
     bool onMouseUp(cocos2d::Event* event);
 
-    // 商店相关方法
-    void onStoreButtonClicked(Ref* sender);
+    // 创建建筑接口(供Store调用)
+    void createBuilding(BuildingType type);
+
+    // 商店按钮点击事件
+    void onStoreButtonClicked(cocos2d::Ref* sender);
+    // 切换商店面板显示状态
     void toggleStorePanel();
-    bool onScrollTouchBegan(cocos2d::Touch* touch, cocos2d::Event* event);
-    bool onScrollTouchMoved(cocos2d::Touch* touch, cocos2d::Event* event);
-    bool onScrollTouchEnded(cocos2d::Touch* touch, cocos2d::Event* event);
-    void onBuildingSelected(Ref* sender);
+    // 初始化建筑滚动内容
+    void initBuildingScrollContent();
 
     CREATE_FUNC(Base);
 
@@ -42,18 +45,21 @@ private:
     int _elixir;
     int _darkElixir;
 
-    // 建筑指针
+    // 指挥中心
     Architecture* _commandCenter;
 
-    // 商店相关成员
-    cocos2d::ui::Button* _storeButton;
-    cocos2d::Layer* _storePanel;
-    cocos2d::ui::ScrollView* _buildingScrollView;
-    bool _isStoreOpen;
-    cocos2d::Vec2 _scrollStartPos;
-    float _scrollContentWidth;
+    // 当前拖动的建筑和偏移量
+    Architecture* _draggingBuilding;
+    cocos2d::Vec2 _buildingDragOffset;
 
-    void initBuildingScrollContent();
+    // 商店相关成员变量
+    cocos2d::ui::Button* _storeButton;       // 商店按钮
+    bool _isStoreOpen;                       // 商店是否打开
+    cocos2d::Layer* _storePanel;             // 商店面板
+    cocos2d::ui::ScrollView* _buildingScrollView; // 建筑滚动视图
+
+    // 商店实例
+    Store* _store;
 };
 
 #endif // __BASE_H__

@@ -1,6 +1,7 @@
 #include "Base.h"
 #include "HelloWorldScene.h"
 #include "Architecture.h"
+#include "Store.h"
 USING_NS_CC;
 using namespace cocos2d::ui;
 
@@ -20,6 +21,7 @@ bool Base::init()
     Vec2 origin = Director::getInstance()->getVisibleOrigin();
     scaleFactor = 1.0f;
     isDragging = false;
+    _draggingBuilding = nullptr;
 
     // 添加背景图
     background = Sprite::create("base_background.png");
@@ -38,31 +40,14 @@ bool Base::init()
         origin.y + visibleSize.height - label->getContentSize().height));
     this->addChild(label, 1);
 
-    // 添加返回按钮（提高层级避免被遮挡）
+    // 添加返回按钮
     auto backButton = Button::create("BackButton.png");
     if (backButton)
     {
         backButton->setPosition(Vec2(origin.x + backButton->getContentSize().width / 2 + 20,
             origin.y + visibleSize.height - backButton->getContentSize().height / 2 - 20));
         backButton->addClickEventListener(CC_CALLBACK_1(Base::menuBackCallback, this));
-        this->addChild(backButton, 4); // 提高层级到4，确保在遮罩上方
-    }
-
-    // 添加关闭按钮
-    auto closeItem = MenuItemImage::create(
-        "CloseNormal.png",
-        "CloseSelected.png",
-        CC_CALLBACK_1(Base::menuCloseCallback, this));
-    closeItem->setTag(999);
-    if (closeItem)
-    {
-        float x = origin.x + visibleSize.width - closeItem->getContentSize().width / 2;
-        float y = origin.y + closeItem->getContentSize().height / 2;
-        closeItem->setPosition(Vec2(x, y));
-
-        auto menu = Menu::create(closeItem, NULL);
-        menu->setPosition(Vec2::ZERO);
-        this->addChild(menu, 1);
+        this->addChild(backButton, 5);  // 提高zOrder确保可点击
     }
 
     // 注册鼠标事件监听器
@@ -82,70 +67,13 @@ bool Base::init()
     _commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
     if (_commandCenter) {
         _commandCenter->setPosition(Vec2(visibleSize.width / 2, visibleSize.height / 2));
+        _commandCenter->setScale(scaleFactor);  // 设置初始缩放
         this->addChild(_commandCenter, 1);
     }
 
-    // 添加商店按钮
-    _storeButton = Button::create("StoreButton.png");
-    if (_storeButton) {
-        float btnX = origin.x + visibleSize.width - _storeButton->getContentSize().width / 2 - 20;
-        float btnY = origin.y + _storeButton->getContentSize().height / 2 + 20;
-        _storeButton->setPosition(Vec2(btnX, btnY));
-        _storeButton->addClickEventListener(CC_CALLBACK_1(Base::onStoreButtonClicked, this));
-        this->addChild(_storeButton, 2);
-    }
-
-    // 初始化商店面板(默认隐藏)
-    _isStoreOpen = false;
-    _storePanel = Layer::create();
-    _storePanel->setVisible(false);
-    this->addChild(_storePanel, 3);
-
-    // 商店面板高度(屏幕的30%)
-    float panelHeight = visibleSize.height * 0.3f;
-
-    // 商店面板背景
-    auto panelBg = LayerColor::create(Color4B(50, 50, 50, 200), visibleSize.width, panelHeight);
-    panelBg->setPosition(Vec2(0, 0));
-    _storePanel->addChild(panelBg);
-
-    // 创建上70%区域的遮罩(修复关闭逻辑)
-    auto mask = LayerColor::create(Color4B(0, 0, 0, 100));
-    mask->setContentSize(Size(visibleSize.width, visibleSize.height - panelHeight));
-    mask->setPosition(Vec2(0, panelHeight)); // 定位在商店面板上方
-
-    auto maskListener = EventListenerTouchOneByOne::create();
-    maskListener->setSwallowTouches(true);
-    maskListener->onTouchBegan = [this, mask](Touch* touch, Event* event) {
-        // 检查点击是否在遮罩范围内
-        Vec2 touchLocation = touch->getLocation();
-        Vec2 maskLocation = mask->convertToNodeSpace(touchLocation);
-        Rect maskRect = Rect(0, 0, mask->getContentSize().width, mask->getContentSize().height);
-
-        if (maskRect.containsPoint(maskLocation)) {
-            toggleStorePanel();
-            return true;
-        }
-        return false;
-        };
-    _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, mask);
-    _storePanel->addChild(mask);
-
-    // 创建建筑选择滚动视图
-    _buildingScrollView = ScrollView::create();
-    _buildingScrollView->setContentSize(Size(visibleSize.width, panelHeight));
-    _buildingScrollView->setPosition(Vec2(0, 0));
-    _buildingScrollView->setDirection(ScrollView::Direction::HORIZONTAL);
-    _storePanel->addChild(_buildingScrollView);
-
-    // 添加建筑图标到滚动视图
-    initBuildingScrollContent();
-
-    // 给滚动视图添加触摸事件防止事件穿透
-    auto scrollListener = EventListenerTouchOneByOne::create();
-    scrollListener->setSwallowTouches(true);
-    scrollListener->onTouchBegan = [](Touch* touch, Event* event) { return true; };
-    _eventDispatcher->addEventListenerWithSceneGraphPriority(scrollListener, _buildingScrollView);
+    // 初始化商店模块(商店包含UI和逻辑)
+    _store = Store::create(this);
+    this->addChild(_store, 5);  // 提高zOrder确保可点击
 
     return true;
 }
@@ -171,20 +99,24 @@ bool Base::onMouseScroll(Event* event)
 
     float scrollY = e->getScrollY();
 
+    // 反转缩放逻辑
     if (scrollY > 0)
     {
-        scaleFactor *= 0.9f;
+        scaleFactor *= 0.9f; 
         if (scaleFactor < 1.0f)
             scaleFactor = 1.0f;
     }
     else if (scrollY < 0)
     {
-        scaleFactor *= 1.1f;
+        scaleFactor *= 1.1f; 
         if (scaleFactor > 3.0f)
             scaleFactor = 3.0f;
     }
 
     background->setScale(scaleFactor);
+    if (_commandCenter) {
+        _commandCenter->setScale(scaleFactor);
+    }
     constrainBackgroundPosition();
 
     return true;
@@ -192,16 +124,24 @@ bool Base::onMouseScroll(Event* event)
 
 bool Base::onMouseMove(Event* event)
 {
-    if (!isDragging || !background) return false;
+    if (!isDragging) return false;
 
     EventMouse* e = static_cast<EventMouse*>(event);
     Vec2 currentMousePos = Vec2(e->getCursorX(), e->getCursorY());
     Vec2 delta = currentMousePos - lastMousePos;
 
-    Vec2 newPos = backgroundPos + delta;
-    backgroundPos = newPos;
-    constrainBackgroundPosition();
-    background->setPosition(backgroundPos);
+    if (_draggingBuilding) {
+        // 拖动建筑
+        Vec2 newPos = this->convertToNodeSpace(currentMousePos) - _buildingDragOffset;
+        _draggingBuilding->setPosition(newPos);
+    }
+    else if (background) {
+        // 拖动背景
+        Vec2 newPos = backgroundPos + delta;
+        backgroundPos = newPos;
+        constrainBackgroundPosition();
+        background->setPosition(backgroundPos);
+    }
 
     lastMousePos = currentMousePos;
     return true;
@@ -243,19 +183,30 @@ bool Base::onMouseDown(Event* event)
         // 获取鼠标位置，转换为UI坐标系
         Vec2 mousePos = this->convertToNodeSpace(Vec2(e->getCursorX(), e->getCursorY()));
 
+        // 检查是否点击返回按钮
+        Node* backButton = getChildByTag(100); // 假设返回按钮有标签100
+        if (backButton && backButton->getBoundingBox().containsPoint(mousePos)) {
+            menuBackCallback(backButton);
+            return true;
+        }
+
         // 检查是否点击商店按钮
-        if (_storeButton && _storeButton->getBoundingBox().containsPoint(mousePos)) {
-            onStoreButtonClicked(_storeButton);
+        if (_store && _store->getStoreButton() &&
+            _store->getStoreButton()->getBoundingBox().containsPoint(mousePos)) {
+            _store->onStoreButtonClicked(nullptr);
             return true;
         }
 
-        // 检查是否点击关闭按钮
-        auto closeItem = this->getChildByTag(999);
-        if (closeItem && closeItem->getBoundingBox().containsPoint(mousePos)) {
-            menuCloseCallback(closeItem);
+        // 检查是否点击了大本营
+        if (_commandCenter && _commandCenter->getBoundingBox().containsPoint(mousePos)) {
+            _draggingBuilding = _commandCenter;
+            _buildingDragOffset = _commandCenter->convertToNodeSpace(mousePos);
+            isDragging = true;
+            lastMousePos = mousePos;
             return true;
         }
 
+        // 如果没有点击任何UI元素，则拖动背景
         isDragging = true;
         lastMousePos = mousePos;
     }
@@ -268,117 +219,39 @@ bool Base::onMouseUp(Event* event)
     if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_LEFT)
     {
         isDragging = false;
+        _draggingBuilding = nullptr;  // 停止拖动建筑
     }
     return true;
 }
 
-// 商店初始化实现
-void Base::initBuildingScrollContent() {
-    const float spacing = 20.0f;
-    const float buildingIconSize = 100.0f;
 
-    std::vector<std::pair<BuildingType, std::string>> buildings = {
-        {BuildingType::GOLD_MINE, "GoldMine.png"},
-        {BuildingType::ELIXIR_COLLECTOR, "ElixirCollector.png"},
-        // 可以添加更多建筑
-    };
-
-    _scrollContentWidth = buildings.size() * (buildingIconSize + spacing) - spacing;
-
-    auto contentLayer = Layer::create();
-    contentLayer->setContentSize(Size(_scrollContentWidth, _buildingScrollView->getContentSize().height));
-    _buildingScrollView->addChild(contentLayer);
-    _buildingScrollView->setInnerContainerSize(contentLayer->getContentSize());
-
-    for (size_t i = 0; i < buildings.size(); ++i) {
-        auto buildingBtn = Button::create(buildings[i].second);
-        buildingBtn->setScale(buildingIconSize / buildingBtn->getContentSize().width);
-        buildingBtn->setPosition(Vec2(
-            i * (buildingIconSize + spacing) + buildingIconSize / 2,
-            _buildingScrollView->getContentSize().height / 2
-        ));
-
-        buildingBtn->setTag(static_cast<int>(buildings[i].first));
-        buildingBtn->addClickEventListener(CC_CALLBACK_1(Base::onBuildingSelected, this));
-        contentLayer->addChild(buildingBtn);
-    }
-}
-
-void Base::onStoreButtonClicked(Ref* sender) {
-    toggleStorePanel();
-}
-
-void Base::toggleStorePanel() {
-    _isStoreOpen = !_isStoreOpen;
-
-    if (_isStoreOpen) {
-        _storePanel->setVisible(true);
-        _storePanel->setPositionY(-_buildingScrollView->getContentSize().height);
-        _storePanel->runAction(MoveTo::create(0.3f, Vec2::ZERO));
-    }
-    else {
-        _storePanel->runAction(Sequence::create(
-            MoveTo::create(0.3f, Vec2(0, -_buildingScrollView->getContentSize().height)),
-            CallFunc::create([this]() {
-                _storePanel->setVisible(false);
-                }),
-            nullptr
-        ));
-    }
-}
-
-bool Base::onScrollTouchBegan(Touch* touch, Event* event) {
-    Vec2 touchLocation = touch->getLocation();
-    Vec2 scrollLocation = _buildingScrollView->convertToNodeSpace(touchLocation);
-    Rect scrollRect = Rect(0, 0, _buildingScrollView->getContentSize().width, _buildingScrollView->getContentSize().height);
-
-    if (scrollRect.containsPoint(scrollLocation)) {
-        _scrollStartPos = touchLocation;
-        return true;
-    }
-    return false;
-}
-
-bool Base::onScrollTouchMoved(Touch* touch, Event* event) {
-    Vec2 currentPos = touch->getLocation();
-    Vec2 delta = currentPos - _scrollStartPos;
-
-    Vec2 innerPos = _buildingScrollView->getInnerContainerPosition();
-    _buildingScrollView->setInnerContainerPosition(Vec2(innerPos.x + delta.x, innerPos.y));
-
-    _scrollStartPos = currentPos;
-    return true;
-}
-
-bool Base::onScrollTouchEnded(Touch* touch, Event* event) {
-    return true;
-}
-
-void Base::onBuildingSelected(Ref* sender) {
-    Button* buildingBtn = dynamic_cast<Button*>(sender);
-    if (!buildingBtn) return;
-
-    BuildingType type = static_cast<BuildingType>(buildingBtn->getTag());
+void Base::createBuilding(BuildingType type)
+{
     bool canBuild = false;
     std::string errorMsg;
 
     // 检查资源是否足够
-    switch (type) {
+    switch (type)
+    {
         case BuildingType::GOLD_MINE:
-            if (_gold >= GOLD_MINE_CONSUME) {
+            if (_gold >= GOLD_MINE_CONSUME)
+            {
                 canBuild = true;
                 _gold -= GOLD_MINE_CONSUME;
             }
-            else {
-                errorMsg = "建造失败，黄金资源不足";
+            else
+            {
+                errorMsg = "建造失败，金币资源不足";
             }
             break;
         case BuildingType::ELIXIR_COLLECTOR:
-            if (_elixir >= ELIXIR_COLLECTOR_CONSUME) {
+            if (_elixir >= ELIXIR_COLLECTOR_CONSUME)
+            {
                 canBuild = true;
                 _elixir -= ELIXIR_COLLECTOR_CONSUME;
             }
-            else {
+            else
+            {
                 errorMsg = "建造失败，圣水资源不足";
             }
             break;
@@ -387,8 +260,9 @@ void Base::onBuildingSelected(Ref* sender) {
             break;
     }
 
-    // 资源不足时显示提示（修复显示问题）
-    if (!canBuild) {
+    // 资源不足时显示提示
+    if (!canBuild)
+    {
         auto visibleSize = Director::getInstance()->getVisibleSize();
         auto origin = Director::getInstance()->getVisibleOrigin();
 
@@ -396,7 +270,7 @@ void Base::onBuildingSelected(Ref* sender) {
         label->setPosition(Vec2(origin.x + visibleSize.width / 2,
             origin.y + visibleSize.height / 2));
         label->setColor(Color3B::RED);
-        this->addChild(label, 100); // 大幅提高层级确保可见
+        this->addChild(label, 100);
 
         // 2秒后自动移除提示
         label->runAction(Sequence::create(
@@ -412,19 +286,23 @@ void Base::onBuildingSelected(Ref* sender) {
     Vec2 visibleCenter = Director::getInstance()->getVisibleSize() / 2;
     Architecture* newBuilding = Architecture::create(type, 1);
 
-    if (newBuilding) {
+    if (newBuilding)
+    {
         float randomX = visibleCenter.x + (rand() % 200 - 100);
         float randomY = visibleCenter.y + (rand() % 200 - 100);
 
         newBuilding->setPosition(Vec2(randomX, randomY));
+        newBuilding->setScale(scaleFactor);  // 新建筑也应用当前缩放
 
-        if (type == BuildingType::GOLD_MINE) {
+        if (type == BuildingType::GOLD_MINE)
+        {
             newBuilding->setResourceCallback([this](ResourceType resType, int amount) {
                 _gold += amount;
                 CCLOG("Gold: %d", _gold);
                 });
         }
-        else if (type == BuildingType::ELIXIR_COLLECTOR) {
+        else if (type == BuildingType::ELIXIR_COLLECTOR)
+        {
             newBuilding->setResourceCallback([this](ResourceType resType, int amount) {
                 _elixir += amount;
                 CCLOG("Elixir: %d", _elixir);
@@ -433,6 +311,21 @@ void Base::onBuildingSelected(Ref* sender) {
 
         this->addChild(newBuilding, 1);
     }
+}
 
-    toggleStorePanel();
+void Base::onStoreButtonClicked(Ref* sender)
+{
+    if (_store) {
+        _store->togglePanel();
+    }
+}
+
+void Base::toggleStorePanel()
+{
+    // 由Store类内部实现
+}
+
+void Base::initBuildingScrollContent()
+{
+    // 由Store类内部实现
 }
