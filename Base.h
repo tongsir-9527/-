@@ -38,12 +38,12 @@ private:
     bool isDragging;
     cocos2d::Vec2 lastMousePos;
     cocos2d::Vec2 backgroundPos;
-    void constrainBackgroundPosition();
-
+    void constrainBackgroundPosition(); //拖动背景时不能超出边界
+    bool checkCollision(Architecture* newBuilding); //建筑之间不能重叠
+    std::vector<Architecture*> _buildings;//建筑
     // 资源数据
     int _gold;
     int _elixir;
-    int _darkElixir;
 
     // 指挥中心
     Architecture* _commandCenter;

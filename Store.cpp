@@ -108,11 +108,14 @@ void Store::initBuildingScrollContent()
     const float spacing = 20.0f;
     const float buildingIconSize = 100.0f;
     auto visibleSize = Director::getInstance()->getVisibleSize();
-
     std::vector<std::pair<BuildingType, std::string>> buildings = {
         {BuildingType::GOLD_MINE, "GoldMine.png"},
         {BuildingType::ELIXIR_COLLECTOR, "ElixirCollector.png"},
-        // 可添加更多建筑
+        {BuildingType::BARRACKS, "Barracks.png"},       // 军营
+        {BuildingType::ARCHER_TOWER, "ArcherTower.png"}, // 弓箭塔
+        {BuildingType::ELIXIR_FONT, "ElixirFont.png"},   // 圣水罐
+        {BuildingType::CANNON, "Cannon.png"},           // 加农炮
+        {BuildingType::VAULT, "Vault.png"}              // 金库
     };
 
     _scrollContentWidth = buildings.size() * (buildingIconSize + spacing) - spacing;

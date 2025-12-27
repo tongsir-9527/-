@@ -47,7 +47,7 @@ bool Base::init()
         backButton->setPosition(Vec2(origin.x + backButton->getContentSize().width / 2 + 20,
             origin.y + visibleSize.height - backButton->getContentSize().height / 2 - 20));
         backButton->addClickEventListener(CC_CALLBACK_1(Base::menuBackCallback, this));
-        this->addChild(backButton, 5);  // 提高zOrder确保可点击
+        this->addChild(backButton, 5);  // 设置zOrder确保按钮可见
     }
 
     // 注册鼠标事件监听器
@@ -59,9 +59,8 @@ bool Base::init()
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
     // 初始化资源
-    _gold = 0;
-    _elixir = 0;
-    _darkElixir = 0;
+    _gold = 10000000;
+    _elixir = 10000000;
 
     // 初始化指挥中心
     _commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
@@ -69,11 +68,12 @@ bool Base::init()
         _commandCenter->setPosition(Vec2(visibleSize.width / 2, visibleSize.height / 2));
         _commandCenter->setScale(scaleFactor);  // 设置初始缩放
         this->addChild(_commandCenter, 1);
+        _buildings.push_back(_commandCenter);  // 添加到建筑列表
     }
 
-    // 初始化商店模块(商店包含UI和逻辑)
+    // 初始化商店模块
     _store = Store::create(this);
-    this->addChild(_store, 5);  // 提高zOrder确保可点击
+    this->addChild(_store, 5);  // 设置zOrder确保可见
 
     return true;
 }
@@ -99,23 +99,24 @@ bool Base::onMouseScroll(Event* event)
 
     float scrollY = e->getScrollY();
 
-    // 反转缩放逻辑
+    // 缩放逻辑
     if (scrollY > 0)
     {
-        scaleFactor *= 0.9f; 
+        scaleFactor *= 0.9f;
         if (scaleFactor < 1.0f)
             scaleFactor = 1.0f;
     }
     else if (scrollY < 0)
     {
-        scaleFactor *= 1.1f; 
+        scaleFactor *= 1.1f;
         if (scaleFactor > 3.0f)
             scaleFactor = 3.0f;
     }
 
     background->setScale(scaleFactor);
-    if (_commandCenter) {
-        _commandCenter->setScale(scaleFactor);
+    // 更新所有建筑的缩放
+    for (auto building : _buildings) {
+        building->setScale(scaleFactor);
     }
     constrainBackgroundPosition();
 
@@ -131,12 +132,12 @@ bool Base::onMouseMove(Event* event)
     Vec2 delta = currentMousePos - lastMousePos;
 
     if (_draggingBuilding) {
-        // 拖动建筑
+        // 移动建筑
         Vec2 newPos = this->convertToNodeSpace(currentMousePos) - _buildingDragOffset;
         _draggingBuilding->setPosition(newPos);
     }
     else if (background) {
-        // 拖动背景
+        // 移动背景
         Vec2 newPos = backgroundPos + delta;
         backgroundPos = newPos;
         constrainBackgroundPosition();
@@ -184,7 +185,7 @@ bool Base::onMouseDown(Event* event)
         Vec2 mousePos = this->convertToNodeSpace(Vec2(e->getCursorX(), e->getCursorY()));
 
         // 检查是否点击返回按钮
-        Node* backButton = getChildByTag(100); // 假设返回按钮有标签100
+        Node* backButton = getChildByTag(100); // 假设返回按钮标记100
         if (backButton && backButton->getBoundingBox().containsPoint(mousePos)) {
             menuBackCallback(backButton);
             return true;
@@ -197,16 +198,18 @@ bool Base::onMouseDown(Event* event)
             return true;
         }
 
-        // 检查是否点击了大本营
-        if (_commandCenter && _commandCenter->getBoundingBox().containsPoint(mousePos)) {
-            _draggingBuilding = _commandCenter;
-            _buildingDragOffset = _commandCenter->convertToNodeSpace(mousePos);
-            isDragging = true;
-            lastMousePos = mousePos;
-            return true;
+        // 检查是否点击任何建筑
+        for (auto building : _buildings) {
+            if (building->getBoundingBox().containsPoint(mousePos)) {
+                _draggingBuilding = building;
+                _buildingDragOffset = building->convertToNodeSpace(mousePos);
+                isDragging = true;
+                lastMousePos = mousePos;
+                return true;
+            }
         }
 
-        // 如果没有点击任何UI元素，则拖动背景
+        // 如果没有点击任何UI元素，开始拖动背景
         isDragging = true;
         lastMousePos = mousePos;
     }
@@ -224,6 +227,16 @@ bool Base::onMouseUp(Event* event)
     return true;
 }
 
+// 检查建筑碰撞
+bool Base::checkCollision(Architecture* newBuilding) {
+    Rect newRect = newBuilding->getBoundingBox();
+    for (auto existing : _buildings) { 
+        if (newRect.intersectsRect(existing->getBoundingBox())) {
+            return true;  // 发生碰撞
+        }
+    }
+    return false;
+}
 
 void Base::createBuilding(BuildingType type)
 {
@@ -241,7 +254,7 @@ void Base::createBuilding(BuildingType type)
             }
             else
             {
-                errorMsg = "建造失败，金币资源不足";
+                errorMsg = "建造失败，黄金资源不足";
             }
             break;
         case BuildingType::ELIXIR_COLLECTOR:
@@ -255,8 +268,63 @@ void Base::createBuilding(BuildingType type)
                 errorMsg = "建造失败，圣水资源不足";
             }
             break;
+        case BuildingType::BARRACKS:
+            if (_gold >= BARRACKS_CONSUME)
+            {
+                canBuild = true;
+                _gold -= BARRACKS_CONSUME;
+            }
+            else
+            {
+                errorMsg = "建造失败，黄金资源不足";
+            }
+            break;
+        case BuildingType::ARCHER_TOWER:
+            if (_gold >= ARCHER_TOWER_CONSUME)
+            {
+                canBuild = true;
+                _gold -= ARCHER_TOWER_CONSUME;
+            }
+            else
+            {
+                errorMsg = "建造失败，黄金资源不足";
+            }
+            break;
+        case BuildingType::CANNON:
+            if (_gold >= CANNON_CONSUME)
+            {
+                canBuild = true;
+                _gold -= CANNON_CONSUME;
+            }
+            else
+            {
+                errorMsg = "建造失败，黄金资源不足";
+            }
+            break;
+        case BuildingType::VAULT:
+            if (_gold >= VAULT_CONSUME)
+            {
+                canBuild = true;
+                _gold -= VAULT_CONSUME;
+            }
+            else
+            {
+                errorMsg = "建造失败，黄金资源不足";
+            }
+            break;
+        case BuildingType::ELIXIR_FONT:
+            if (_elixir >= ELIXIR_FONT_CONSUME)
+            {
+                canBuild = true;
+                _elixir -= ELIXIR_FONT_CONSUME;
+            }
+            else
+            {
+                errorMsg = "建造失败，圣水资源不足";
+            }
+            break;
         default:
-            errorMsg = "未知错误";
+            errorMsg = "未知建筑类型";
             break;
     }
 
@@ -288,12 +356,53 @@ void Base::createBuilding(BuildingType type)
 
     if (newBuilding)
     {
-        float randomX = visibleCenter.x + (rand() % 200 - 100);
-        float randomY = visibleCenter.y + (rand() % 200 - 100);
+        float randomX, randomY;
+        bool foundPosition = false;
+        // 尝试100次寻找合适位置
+        for (int i = 0; i < 100; i++) {
+            randomX = visibleCenter.x + (rand() % 200 - 100);
+            randomY = visibleCenter.y + (rand() % 200 - 100);
+            newBuilding->setPosition(Vec2(randomX, randomY));
 
-        newBuilding->setPosition(Vec2(randomX, randomY));
-        newBuilding->setScale(scaleFactor);  // 新建筑也应用当前缩放
+            if (!checkCollision(newBuilding)) {
+                foundPosition = true;
+                break;
+            }
+        }
 
+        if (!foundPosition) {
+            // 恢复消耗的资源
+            switch (type)
+            {
+                case BuildingType::GOLD_MINE: _gold += GOLD_MINE_CONSUME; break;
+                case BuildingType::ELIXIR_COLLECTOR: _elixir += ELIXIR_COLLECTOR_CONSUME; break;
+                case BuildingType::BARRACKS: _gold += BARRACKS_CONSUME; break;
+                case BuildingType::ARCHER_TOWER: _gold += ARCHER_TOWER_CONSUME; break;
+                case BuildingType::CANNON: _gold += CANNON_CONSUME; break;
+                case BuildingType::VAULT: _gold += VAULT_CONSUME; break;
+                case BuildingType::ELIXIR_FONT: _elixir += ELIXIR_FONT_CONSUME; break;
+                default: break;
+            }
+
+            errorMsg = "没有足够空间建造建筑";
+            auto visibleSize = Director::getInstance()->getVisibleSize();
+            auto origin = Director::getInstance()->getVisibleOrigin();
+            auto label = Label::createWithTTF(errorMsg, "fonts/Marker Felt.ttf", 36);
+            label->setPosition(Vec2(origin.x + visibleSize.width / 2, origin.y + visibleSize.height / 2));
+            label->setColor(Color3B::RED);
+            this->addChild(label, 100);
+            label->runAction(Sequence::create(
+                DelayTime::create(2.0f),
+                FadeOut::create(0.5f),
+                RemoveSelf::create(),
+                nullptr
+            ));
+            return;
+        }
+
+        newBuilding->setScale(scaleFactor);  // 新建筑应用当前缩放
+
+        // 设置资源生产回调
         if (type == BuildingType::GOLD_MINE)
         {
             newBuilding->setResourceCallback([this](ResourceType resType, int amount) {
@@ -301,7 +410,7 @@ void Base::createBuilding(BuildingType type)
                 CCLOG("Gold: %d", _gold);
                 });
         }
-        else if (type == BuildingType::ELIXIR_COLLECTOR)
+        else if (type == BuildingType::ELIXIR_COLLECTOR || type == BuildingType::ELIXIR_FONT)
         {
             newBuilding->setResourceCallback([this](ResourceType resType, int amount) {
                 _elixir += amount;
@@ -310,6 +419,7 @@ void Base::createBuilding(BuildingType type)
         }
 
         this->addChild(newBuilding, 1);
+        _buildings.push_back(newBuilding);  // 添加到建筑列表
     }
 }
 
