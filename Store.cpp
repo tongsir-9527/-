@@ -1,5 +1,6 @@
 #include "Store.h"
 #include "Base.h"
+#include "MilitaryUnit.h" // 新增军队头文件
 
 using namespace cocos2d;
 using namespace cocos2d::ui;
@@ -26,6 +27,7 @@ bool Store::init(Base* baseScene)
     _baseScene = baseScene;
     _isOpen = false;
 
+    // 初始化商店按钮和面板
     initStoreButton();
     initStorePanel();
     initBuildingScrollContent();
@@ -53,16 +55,20 @@ void Store::initStorePanel()
 {
     auto visibleSize = Director::getInstance()->getVisibleSize();
 
+    // 商店面板容器
     _storePanel = Layer::create();
     _storePanel->setVisible(false);
     this->addChild(_storePanel, 3);
 
+    // 面板高度(屏幕的30%)
     float panelHeight = visibleSize.height * 0.3f;
 
+    // 面板背景
     auto panelBg = LayerColor::create(Color4B(50, 50, 50, 200), visibleSize.width, panelHeight);
     panelBg->setPosition(Vec2(0, 0));
     _storePanel->addChild(panelBg);
 
+    // 遮罩层(点击关闭商店)
     auto mask = LayerColor::create(Color4B(0, 0, 0, 100));
     mask->setContentSize(Size(visibleSize.width, visibleSize.height - panelHeight));
     mask->setPosition(Vec2(0, panelHeight));
@@ -84,12 +90,14 @@ void Store::initStorePanel()
     _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, mask);
     _storePanel->addChild(mask);
 
+    // 建筑滚动视图
     _buildingScrollView = ScrollView::create();
     _buildingScrollView->setContentSize(Size(visibleSize.width, panelHeight));
     _buildingScrollView->setPosition(Vec2(0, 0));
     _buildingScrollView->setDirection(ScrollView::Direction::HORIZONTAL);
     _storePanel->addChild(_buildingScrollView);
 
+    // 阻止滚动视图事件穿透
     auto scrollListener = EventListenerTouchOneByOne::create();
     scrollListener->setSwallowTouches(true);
     scrollListener->onTouchBegan = [](Touch* touch, Event* event) { return true; };
@@ -101,6 +109,8 @@ void Store::initBuildingScrollContent()
     const float spacing = 20.0f;
     const float buildingIconSize = 100.0f;
     auto visibleSize = Director::getInstance()->getVisibleSize();
+
+    // 建筑列表
     std::vector<std::pair<BuildingType, std::string>> buildings = {
         {BuildingType::GOLD_MINE, "GoldMine.png"},
         {BuildingType::ELIXIR_COLLECTOR, "ElixirCollector.png"},
@@ -111,13 +121,23 @@ void Store::initBuildingScrollContent()
         {BuildingType::VAULT, "Vault.png"}
     };
 
-    _scrollContentWidth = buildings.size() * (buildingIconSize + spacing) - spacing;
+    // 新增军队单位列表
+    std::vector<std::pair<MilitaryType, std::string>> militaryUnits = {
+        {MilitaryType::BOMBER, "BomberIcon.png"},
+        {MilitaryType::ARCHER, "ArcherIcon.png"},
+        {MilitaryType::BARBARIAN, "BarbarianIcon.png"},
+        {MilitaryType::GIANT, "GiantIcon.png"}
+    };
+
+    // 计算总宽度
+    _scrollContentWidth = (buildings.size() + militaryUnits.size()) * (buildingIconSize + spacing) - spacing;
 
     auto contentLayer = Layer::create();
     contentLayer->setContentSize(Size(_scrollContentWidth, _buildingScrollView->getContentSize().height));
     _buildingScrollView->addChild(contentLayer);
     _buildingScrollView->setInnerContainerSize(contentLayer->getContentSize());
 
+    // 添加建筑按钮
     for (size_t i = 0; i < buildings.size(); ++i)
     {
         auto buildingBtn = Button::create(buildings[i].second);
@@ -130,6 +150,21 @@ void Store::initBuildingScrollContent()
         buildingBtn->setTag(static_cast<int>(buildings[i].first));
         buildingBtn->addClickEventListener(CC_CALLBACK_1(Store::onBuildingSelected, this));
         contentLayer->addChild(buildingBtn);
+    }
+
+    // 添加军队单位按钮（标签值+1000区分建筑）
+    for (size_t i = 0; i < militaryUnits.size(); ++i)
+    {
+        auto unitBtn = Button::create(militaryUnits[i].second);
+        unitBtn->setScale(buildingIconSize / unitBtn->getContentSize().width);
+        unitBtn->setPosition(Vec2(
+            (buildings.size() + i) * (buildingIconSize + spacing) + buildingIconSize / 2,
+            _buildingScrollView->getContentSize().height / 2
+        ));
+
+        unitBtn->setTag(1000 + static_cast<int>(militaryUnits[i].first));
+        unitBtn->addClickEventListener(CC_CALLBACK_1(Store::onBuildingSelected, this));
+        contentLayer->addChild(unitBtn);
     }
 }
 
@@ -163,13 +198,21 @@ void Store::onStoreButtonClicked(Ref* sender)
 
 void Store::onBuildingSelected(Ref* sender)
 {
-    Button* buildingBtn = dynamic_cast<Button*>(sender);
-    if (buildingBtn)
-    {
-        BuildingType type = static_cast<BuildingType>(buildingBtn->getTag());
-        _baseScene->createBuilding(type);
-        togglePanel();
+    Button* btn = dynamic_cast<Button*>(sender);
+    if (!btn) return;
+
+    int tag = btn->getTag();
+    if (tag >= 1000) {
+        // 军队单位（标签值-1000还原类型）
+        MilitaryType type = static_cast<MilitaryType>(tag - 1000);
+        _baseScene->createMilitaryUnit(type);
     }
+    else {
+        // 建筑类型
+        BuildingType type = static_cast<BuildingType>(tag);
+        _baseScene->createBuilding(type);
+    }
+    togglePanel();
 }
 
 bool Store::onScrollTouchBegan(Touch* touch, Event* event)
