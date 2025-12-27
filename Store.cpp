@@ -26,7 +26,6 @@ bool Store::init(Base* baseScene)
     _baseScene = baseScene;
     _isOpen = false;
 
-    // 初始化商店按钮和面板
     initStoreButton();
     initStorePanel();
     initBuildingScrollContent();
@@ -54,20 +53,16 @@ void Store::initStorePanel()
 {
     auto visibleSize = Director::getInstance()->getVisibleSize();
 
-    // 商店面板容器
     _storePanel = Layer::create();
     _storePanel->setVisible(false);
     this->addChild(_storePanel, 3);
 
-    // 面板高度(屏幕的30%)
     float panelHeight = visibleSize.height * 0.3f;
 
-    // 面板背景
     auto panelBg = LayerColor::create(Color4B(50, 50, 50, 200), visibleSize.width, panelHeight);
     panelBg->setPosition(Vec2(0, 0));
     _storePanel->addChild(panelBg);
 
-    // 遮罩层(点击关闭商店)
     auto mask = LayerColor::create(Color4B(0, 0, 0, 100));
     mask->setContentSize(Size(visibleSize.width, visibleSize.height - panelHeight));
     mask->setPosition(Vec2(0, panelHeight));
@@ -89,14 +84,12 @@ void Store::initStorePanel()
     _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, mask);
     _storePanel->addChild(mask);
 
-    // 建筑滚动视图
     _buildingScrollView = ScrollView::create();
     _buildingScrollView->setContentSize(Size(visibleSize.width, panelHeight));
     _buildingScrollView->setPosition(Vec2(0, 0));
     _buildingScrollView->setDirection(ScrollView::Direction::HORIZONTAL);
     _storePanel->addChild(_buildingScrollView);
 
-    // 阻止滚动视图事件穿透
     auto scrollListener = EventListenerTouchOneByOne::create();
     scrollListener->setSwallowTouches(true);
     scrollListener->onTouchBegan = [](Touch* touch, Event* event) { return true; };
@@ -111,11 +104,11 @@ void Store::initBuildingScrollContent()
     std::vector<std::pair<BuildingType, std::string>> buildings = {
         {BuildingType::GOLD_MINE, "GoldMine.png"},
         {BuildingType::ELIXIR_COLLECTOR, "ElixirCollector.png"},
-        {BuildingType::BARRACKS, "Barracks.png"},       // 军营
-        {BuildingType::ARCHER_TOWER, "ArcherTower.png"}, // 弓箭塔
-        {BuildingType::ELIXIR_FONT, "ElixirFont.png"},   // 圣水罐
-        {BuildingType::CANNON, "Cannon.png"},           // 加农炮
-        {BuildingType::VAULT, "Vault.png"}              // 金库
+        {BuildingType::BARRACKS, "Barracks.png"},
+        {BuildingType::ARCHER_TOWER, "ArcherTower.png"},
+        {BuildingType::ELIXIR_FONT, "ElixirFont.png"},
+        {BuildingType::CANNON, "Cannon.png"},
+        {BuildingType::VAULT, "Vault.png"}
     };
 
     _scrollContentWidth = buildings.size() * (buildingIconSize + spacing) - spacing;
@@ -170,13 +163,10 @@ void Store::onStoreButtonClicked(Ref* sender)
 
 void Store::onBuildingSelected(Ref* sender)
 {
-    // 调用Base类的资源检查和建筑创建方法
-    // 需要在Base类中添加对应的public方法
     Button* buildingBtn = dynamic_cast<Button*>(sender);
     if (buildingBtn)
     {
         BuildingType type = static_cast<BuildingType>(buildingBtn->getTag());
-        // 这里假设Base类有createBuilding方法处理实际创建逻辑
         _baseScene->createBuilding(type);
         togglePanel();
     }

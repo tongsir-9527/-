@@ -14,20 +14,15 @@ public:
     void menuCloseCallback(cocos2d::Ref* pSender);
     void menuBackCallback(cocos2d::Ref* pSender);
 
-    // 鼠标事件
     bool onMouseScroll(cocos2d::Event* event);
     bool onMouseDown(cocos2d::Event* event);
     bool onMouseMove(cocos2d::Event* event);
     bool onMouseUp(cocos2d::Event* event);
 
-    // 创建建筑接口(供Store调用)
     void createBuilding(BuildingType type);
 
-    // 商店按钮点击事件
     void onStoreButtonClicked(cocos2d::Ref* sender);
-    // 切换商店面板显示状态
     void toggleStorePanel();
-    // 初始化建筑滚动内容
     void initBuildingScrollContent();
 
     CREATE_FUNC(Base);
@@ -38,28 +33,32 @@ private:
     bool isDragging;
     cocos2d::Vec2 lastMousePos;
     cocos2d::Vec2 backgroundPos;
-    void constrainBackgroundPosition(); //拖动背景时不能超出边界
-    bool checkCollision(Architecture* newBuilding); //建筑之间不能重叠
-    std::vector<Architecture*> _buildings;//建筑
-    // 资源数据
+    void constrainBackgroundPosition();
+    std::vector<Architecture*> _buildings;
     int _gold;
     int _elixir;
 
-    // 指挥中心
     Architecture* _commandCenter;
 
-    // 当前拖动的建筑和偏移量
     Architecture* _draggingBuilding;
     cocos2d::Vec2 _buildingDragOffset;
 
-    // 商店相关成员变量
-    cocos2d::ui::Button* _storeButton;       // 商店按钮
-    bool _isStoreOpen;                       // 商店是否打开
-    cocos2d::Layer* _storePanel;             // 商店面板
-    cocos2d::ui::ScrollView* _buildingScrollView; // 建筑滚动视图
+    cocos2d::ui::Button* _storeButton;
+    bool _isStoreOpen;
+    cocos2d::Layer* _storePanel;
+    cocos2d::ui::ScrollView* _buildingScrollView;
 
-    // 商店实例
     Store* _store;
+
+    Architecture* _selectedBuilding;
+    cocos2d::ui::Button* _upgradeButton;
+    cocos2d::ui::Button* _cancelButton;
+    cocos2d::Vec2 _rightClickStartPos;
+    float _rightClickThreshold = 5.0f;
+    void hideActionButtons();
+    void showActionButtons(Architecture* building);
+    bool isUpgradePossible(BuildingType type);
+    void refundResources(BuildingType type, int level);
 };
 
 #endif // __BASE_H__

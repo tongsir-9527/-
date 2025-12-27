@@ -18,13 +18,24 @@ enum class ResourceType {
     GOLD,
     ELIXIR,
 };
-static const int GOLD_MINE_CONSUME = 100;       // 金矿建造消耗（√）
-static const int ELIXIR_COLLECTOR_CONSUME = 80; // 圣水收集器建造消耗（√）
-static const int BARRACKS_CONSUME = 150;        // 军营建造消耗（√）
-static const int ARCHER_TOWER_CONSUME = 120;    // 弓箭塔建造消耗（√）
-static const int CANNON_CONSUME = 100;          // 加农炮建造消耗（√）
-static const int VAULT_CONSUME = 100;           // 金库建造消耗（√）
-static const int ELIXIR_FONT_CONSUME = 80;      // 圣水罐建造消耗（已找到资源图片）
+static const int GOLD_MINE_CONSUME = 100;
+static const int ELIXIR_COLLECTOR_CONSUME = 80;
+static const int BARRACKS_CONSUME = 150;
+static const int ARCHER_TOWER_CONSUME = 120;
+static const int CANNON_CONSUME = 100;
+static const int VAULT_CONSUME = 100;
+static const int ELIXIR_FONT_CONSUME = 80;
+
+// 升级消耗
+static const int GOLD_MINE_UPGRADE_CONSUME = 50;
+static const int ELIXIR_COLLECTOR_UPGRADE_CONSUME = 40;
+static const int BARRACKS_UPGRADE_CONSUME = 75;
+static const int ARCHER_TOWER_UPGRADE_CONSUME = 60;
+static const int CANNON_UPGRADE_CONSUME = 50;
+static const int VAULT_UPGRADE_CONSUME = 50;
+static const int ELIXIR_FONT_UPGRADE_CONSUME = 40;
+static const int COMMAND_CENTER_UPGRADE_CONSUME = 200;
+
 class Architecture : public cocos2d::Sprite
 {
 public:
@@ -38,6 +49,10 @@ public:
     void setResourceCallback(std::function<void(ResourceType, int)> callback) {
         _resourceCallback = callback;
     }
+    int getHealth() const { return _health; }
+    int getMaxHealth() const { return _maxHealth; }
+    void showLevelLabel();
+    void hideLevelLabel();
 
 private:
     BuildingType _type;
@@ -46,6 +61,9 @@ private:
     int _productionRate;
     float _productionTimer;
     std::function<void(ResourceType, int)> _resourceCallback;
+    int _health;
+    int _maxHealth;
+    cocos2d::Label* _levelLabel;
     void initPropertiesByType();
 };
 
