@@ -14,33 +14,29 @@ enum class BuildingType {
     ELIXIR_FONT,
 };
 
-// 新增军队类型枚举
-enum class MilitaryType {
-    BOMBER,       // 炸弹人
-    ARCHER,       // 弓箭手
-    BARBARIAN,    // 野蛮人
-    GIANT         // 巨人
-};
-
 enum class ResourceType {
     GOLD,
     ELIXIR,
 };
 
-// 建筑消耗定义
-static const int GOLD_MINE_CONSUME = 100;       // 金矿消耗
-static const int ELIXIR_COLLECTOR_CONSUME = 80; // 圣水收集器消耗
-static const int BARRACKS_CONSUME = 150;        // 兵营消耗
-static const int ARCHER_TOWER_CONSUME = 120;    // 弓箭塔消耗
-static const int CANNON_CONSUME = 100;          // 加农炮消耗
-static const int VAULT_CONSUME = 100;           // 金库消耗
-static const int ELIXIR_FONT_CONSUME = 80;      // 圣水瓶消耗
+// 建筑建造消耗
+static const int GOLD_MINE_CONSUME = 100;
+static const int ELIXIR_COLLECTOR_CONSUME = 80;
+static const int BARRACKS_CONSUME = 150;
+static const int ARCHER_TOWER_CONSUME = 120;
+static const int CANNON_CONSUME = 120;
+static const int VAULT_CONSUME = 130;
+static const int ELIXIR_FONT_CONSUME = 130;
 
-// 军队消耗定义
-static const int BOMBER_CONSUME = 50;        // 炸弹人消耗（圣水）
-static const int ARCHER_CONSUME = 30;        // 弓箭手消耗（圣水）
-static const int BARBARIAN_CONSUME = 40;     // 野蛮人消耗（圣水）
-static const int GIANT_CONSUME = 100;        // 巨人消耗（圣水）
+// 建筑升级消耗（基础值，每级×10）
+static const int GOLD_MINE_UPGRADE_BASE = 50;
+static const int ELIXIR_COLLECTOR_UPGRADE_BASE = 40;
+static const int BARRACKS_UPGRADE_BASE = 75;
+static const int ARCHER_TOWER_UPGRADE_BASE = 60;
+static const int CANNON_UPGRADE_BASE = 50;
+static const int VAULT_UPGRADE_BASE = 50;
+static const int ELIXIR_FONT_UPGRADE_BASE = 40;
+static const int COMMAND_CENTER_UPGRADE_BASE = 200;
 
 class Architecture : public cocos2d::Sprite
 {
@@ -50,11 +46,17 @@ public:
 
     BuildingType getType() const { return _type; }
     int getLevel() const { return _level; }
+    int getMaxLevel() const { return _maxLevel; }
     bool upgrade();
     void produceResource(float delta);
     void setResourceCallback(std::function<void(ResourceType, int)> callback) {
         _resourceCallback = callback;
     }
+    int getHealth() const { return _health; }
+    int getMaxHealth() const { return _maxHealth; }
+    int getDamage() const { return _damage; } // 防御建筑的伤害值
+    void showLevelLabel();
+    void hideLevelLabel();
 
 private:
     BuildingType _type;
@@ -63,6 +65,10 @@ private:
     int _productionRate;
     float _productionTimer;
     std::function<void(ResourceType, int)> _resourceCallback;
+    int _health;
+    int _maxHealth;
+    int _damage; // 防御建筑的伤害值
+    cocos2d::Label* _levelLabel;
     void initPropertiesByType();
 };
 
