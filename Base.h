@@ -5,6 +5,7 @@
 #include "ui/CocosGUI.h"
 #include "Architecture.h"
 #include "Store.h"
+#include "AttackScene.h"
 
 class Base : public cocos2d::Scene
 {

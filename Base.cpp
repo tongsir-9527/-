@@ -42,13 +42,37 @@ bool Base::init()
         origin.y + visibleSize.height - label->getContentSize().height));
     this->addChild(label, 1);
 
+    // 返回按钮（左上角）- 修复：设置tag以便识别
     auto backButton = Button::create("BackButton.png");
     if (backButton)
     {
         backButton->setPosition(Vec2(origin.x + backButton->getContentSize().width / 2 + 20,
             origin.y + visibleSize.height - backButton->getContentSize().height / 2 - 20));
+        backButton->setTag(100); // 设置tag，用于识别
         backButton->addClickEventListener(CC_CALLBACK_1(Base::menuBackCallback, this));
         this->addChild(backButton, 5);
+    }
+
+    // 攻击按钮（左上角，返回按钮下方）
+    auto attackButton = Button::create("AttackButton.png");
+    if (attackButton)
+    {
+        // 计算攻击按钮的位置（在返回按钮下方）
+        float attackButtonY = origin.y + visibleSize.height - backButton->getContentSize().height - attackButton->getContentSize().height / 2 - 40;
+        attackButton->setPosition(Vec2(origin.x + attackButton->getContentSize().width / 2 + 20, attackButtonY));
+        attackButton->setTag(101); // 设置tag
+
+        // 修复：使用lambda函数处理点击事件
+        attackButton->addClickEventListener([this](Ref* sender) {
+            CCLOG("攻击按钮被点击");
+            auto attackScene = AttackScene::createScene();
+            if (attackScene)
+            {
+                Director::getInstance()->replaceScene(TransitionFade::create(0.5f, attackScene));
+            }
+            });
+
+        this->addChild(attackButton, 5);
     }
 
     auto listener = EventListenerMouse::create();
@@ -65,9 +89,12 @@ bool Base::init()
 
     _commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
     if (_commandCenter) {
-        _commandCenter->setPosition(Vec2::ZERO);
+        _commandCenter->setPosition(Vec2(background->getContentSize().width / 2,
+            background->getContentSize().height / 2));
         background->addChild(_commandCenter, 1);
         _buildings.push_back(_commandCenter);
+        CCLOG("CommandCenter创建在位置: (%f, %f)",
+            _commandCenter->getPositionX(), _commandCenter->getPositionY());
     }
 
     _store = Store::create(this);
@@ -89,6 +116,7 @@ void Base::menuCloseCallback(Ref* pSender)
 
 void Base::menuBackCallback(Ref* pSender)
 {
+    CCLOG("返回按钮被点击");
     auto helloWorldScene = HelloWorld::createScene();
     if (helloWorldScene)
     {
@@ -189,9 +217,16 @@ bool Base::onMouseDown(Event* event)
 
     if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_LEFT)
     {
-        Node* backButton = getChildByTag(100);
+        // 修复：直接检查返回按钮和攻击按钮的点击
+        auto backButton = dynamic_cast<Button*>(this->getChildByTag(100));
         if (backButton && backButton->getBoundingBox().containsPoint(mousePos)) {
             menuBackCallback(backButton);
+            return true;
+        }
+
+        auto attackButton = dynamic_cast<Button*>(this->getChildByTag(101));
+        if (attackButton && attackButton->getBoundingBox().containsPoint(mousePos)) {
+            // 攻击按钮的点击事件已经在addClickEventListener中处理
             return true;
         }
 
@@ -694,7 +729,7 @@ void Base::addResourceDisplays(const Size& visibleSize, const Vec2& origin)
     createResourceDisplay(
         "GoldCoin.png",
         Color3B::YELLOW,
-        Vec2(visibleSize.width - origin.x - barWidth - iconSize - spacing - 20,
+        Vec2(visibleSize.width - origin.x - barWidth - iconSize - spacing - 40,
             visibleSize.height - origin.y - topMargin),
         barWidth,
         barHeight,
@@ -704,7 +739,7 @@ void Base::addResourceDisplays(const Size& visibleSize, const Vec2& origin)
     createResourceDisplay(
         "Elixir.png",
         Color3B::BLUE,
-        Vec2(visibleSize.width - origin.x - barWidth - iconSize - spacing - 20,
+        Vec2(visibleSize.width - origin.x - barWidth - iconSize - spacing - 40,
             visibleSize.height - origin.y - topMargin - barHeight - spacing),
         barWidth,
         barHeight,

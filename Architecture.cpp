@@ -140,9 +140,13 @@ void Architecture::produceResource(float delta) {
 }
 
 void Architecture::showLevelLabel() {
-    _levelLabel->setVisible(true);
+    if (_levelLabel) {
+        _levelLabel->setVisible(true);
+    }
 }
 
 void Architecture::hideLevelLabel() {
-    _levelLabel->setVisible(false);
+    if (_levelLabel) {
+        _levelLabel->setVisible(false);
+    }
 }

@@ -41,22 +41,27 @@ static const int COMMAND_CENTER_UPGRADE_BASE = 200;
 class Architecture : public cocos2d::Sprite
 {
 public:
+    // 确保这些函数是公开的
     static Architecture* create(BuildingType type, int level = 1);
     virtual bool init(BuildingType type, int level);
 
     BuildingType getType() const { return _type; }
     int getLevel() const { return _level; }
     int getMaxLevel() const { return _maxLevel; }
-    bool upgrade();
+
+    bool upgrade();  // 添加分号
     void produceResource(float delta);
+
     void setResourceCallback(std::function<void(ResourceType, int)> callback) {
         _resourceCallback = callback;
     }
+
     int getHealth() const { return _health; }
     int getMaxHealth() const { return _maxHealth; }
     int getDamage() const { return _damage; } // 防御建筑的伤害值
+
     void showLevelLabel();
-    void hideLevelLabel();
+    void hideLevelLabel(); 
 
 private:
     BuildingType _type;
