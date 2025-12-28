@@ -4,7 +4,7 @@
 #include "cocos2d.h"
 #include "Architecture.h"
 
-// 军队类型枚举
+// 濂勦濬倰繹撼
 enum class MilitaryType {
     BOMBER,
     ARCHER,
@@ -18,13 +18,24 @@ public:
     static MilitaryUnit* create(MilitaryType type);
     virtual bool init(MilitaryType type);
 
+    void update(float delta) override;
+
     MilitaryType getType() const { return _type; }
     int getHealth() const { return _health; }
     int getMaxHealth() const { return _maxHealth; }
     bool isAlive() const { return _health > 0; }
     void takeDamage(int damage);
-    void attack(float delta);
-    void setAttackTarget(cocos2d::Node* target) { _attackTarget = target; }
+    void setAttackTarget(Architecture* target) { _attackTarget = target; }
+    Architecture* getAttackTarget() const { return _attackTarget; }
+
+    // 设置攻击优先级
+    BuildingType getPreferredTarget() const;
+
+    // 移动到目标
+    void moveToTarget(float delta);
+
+    // 攻击目标
+    void attackTarget(float delta);
 
 private:
     MilitaryType _type;
@@ -34,7 +45,10 @@ private:
     float _attackRange;
     float _attackCooldown;
     float _attackTimer;
-    cocos2d::Node* _attackTarget;
+    float _moveSpeed;
+    Architecture* _attackTarget;
+    bool _isMoving;
+    bool _isAttacking;
 
     void initPropertiesByType();
     cocos2d::LayerColor* _healthBar;

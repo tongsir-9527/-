@@ -92,12 +92,89 @@ bool AttackScene::init()
     listener->onMouseUp = CC_CALLBACK_1(AttackScene::onMouseUp, this);
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
-    // 更新循环
+    // 更新循环 - 每秒更新10次
     this->schedule(schedule_selector(AttackScene::updateDefenseBuildings), 0.1f);
     this->schedule(schedule_selector(AttackScene::updateDefenseAttacks), 0.1f);
+    this->schedule(schedule_selector(AttackScene::updateMilitaryUnits), 0.1f);
 
     return true;
 }
+
+void AttackScene::updateMilitaryUnits(float delta)
+{
+    // 为每个军队单位分配目标（如果没有目标或目标已死亡）
+    for (auto unit : _militaryUnits)
+    {
+        if (!unit->isAlive()) continue;
+
+        if (!unit->getAttackTarget() || unit->getAttackTarget()->getHealth() <= 0)
+        {
+            // 根据单位类型选择优先目标
+            BuildingType preferredTarget = unit->getPreferredTarget();
+            Architecture* bestTarget = nullptr;
+            float bestDistance = FLT_MAX;
+
+            for (auto building : _attackBuildings)
+            {
+                if (building->getHealth() <= 0) continue;
+
+                // 检查是否是优先目标类型
+                if (building->getType() == preferredTarget)
+                {
+                    float distance = unit->getPosition().distance(building->getPosition());
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestTarget = building;
+                    }
+                }
+            }
+
+            // 如果没有找到优先目标，选择最近的建筑
+            if (!bestTarget)
+            {
+                for (auto building : _attackBuildings)
+                {
+                    if (building->getHealth() <= 0) continue;
+
+                    float distance = unit->getPosition().distance(building->getPosition());
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestTarget = building;
+                    }
+                }
+            }
+
+            if (bestTarget)
+            {
+                unit->setAttackTarget(bestTarget);
+            }
+        }
+    }
+
+    // 更新所有存活的军队单位
+    for (auto it = _militaryUnits.begin(); it != _militaryUnits.end();)
+    {
+        MilitaryUnit* unit = *it;
+
+        if (unit->isAlive())
+        {
+            // MilitaryUnit的update会在其内部处理移动和攻击
+            // 这里我们只需要检查单位是否死亡
+        }
+        else
+        {
+            // 单位死亡，从列表中移除并减少计数
+            it = _militaryUnits.erase(it);
+            _currentArmyCount--;
+            updateArmyDisplay();
+            continue;
+        }
+        ++it;
+    }
+}
+
 void AttackScene::addAttackRangeToBuilding(Architecture* building)
 {
     float range = 0.0f;
@@ -141,6 +218,7 @@ void AttackScene::addAttackRangeToBuilding(Architecture* building)
     // 存储范围引用（可以使用tag来区分）
     rangeCircle->setTag(999); // 为攻击范围设置特殊tag
 }
+
 void AttackScene::initAttackBuildings()
 {
     // 清空现有建筑
@@ -430,12 +508,14 @@ void AttackScene::createMilitaryUnit(MilitaryType type)
         _currentArmyCount++;
         updateArmyDisplay();
 
-        // 设置攻击目标（最近的防御建筑）
+        // 设置初始攻击目标（最近的建筑）
         if (!_attackBuildings.empty()) {
             Architecture* nearest = nullptr;
             float minDistance = FLT_MAX;
 
             for (auto building : _attackBuildings) {
+                if (building->getHealth() <= 0) continue;
+
                 float distance = unit->getPosition().distance(building->getPosition());
                 if (distance < minDistance) {
                     minDistance = distance;
@@ -510,15 +590,13 @@ void AttackScene::updateDefenseBuildings(float delta)
         if (healthBar) {
             float healthPercent = (float)building->getHealth() / building->getMaxHealth();
             healthBar->setContentSize(Size(building->getContentSize().width * healthPercent, 5));
+
+            // 如果建筑血量小于等于0，显示摧毁效果
+            if (building->getHealth() <= 0 && building->getOpacity() > 0) {
+                building->runAction(FadeOut::create(0.5f));
+            }
         }
     }
-
-    // 移除死亡的军队单位
-    _militaryUnits.erase(
-        std::remove_if(_militaryUnits.begin(), _militaryUnits.end(),
-            [](MilitaryUnit* unit) { return !unit->isAlive(); }),
-        _militaryUnits.end()
-    );
 }
 
 void AttackScene::updateDefenseAttacks(float delta)
@@ -526,12 +604,16 @@ void AttackScene::updateDefenseAttacks(float delta)
     static float attackTimer = 0;
     attackTimer += delta;
 
-    if (attackTimer < 1.0f) return; // 每秒攻击一次
+    if (attackTimer < 0.1f) return; // 每0.1秒检查一次
     attackTimer = 0;
 
     // 防御建筑攻击军队单位
     for (auto& defense : _defenseBuildings) {
         if (!defense.building || defense.building->getHealth() <= 0) continue;
+
+        // 检查攻击冷却
+        defense.lastAttackTime += 0.1f;
+        if (defense.lastAttackTime < defense.attackInterval) continue;
 
         // 寻找攻击范围内的军队单位
         for (auto unit : _militaryUnits) {
@@ -540,6 +622,9 @@ void AttackScene::updateDefenseAttacks(float delta)
                 if (distance <= defense.attackRange) {
                     // 防御建筑攻击军队单位
                     unit->takeDamage(defense.attackDamage);
+
+                    // 重置攻击计时器
+                    defense.lastAttackTime = 0;
 
                     // 如果单位死亡，更新计数
                     if (!unit->isAlive()) {

@@ -21,6 +21,8 @@ bool MilitaryUnit::init(MilitaryType type) {
     _attackTimer = 0;
     _attackTarget = nullptr;
     _healthBar = nullptr;
+    _isMoving = true;
+    _isAttacking = false;
     initPropertiesByType();
 
     // 设置单位纹理
@@ -62,8 +64,8 @@ bool MilitaryUnit::init(MilitaryType type) {
         this->addChild(_healthBar);
     }
 
-    // 启动攻击计时器
-    this->schedule(schedule_selector(MilitaryUnit::attack), 0.5f);
+    // 启动更新循环
+    this->scheduleUpdate();
     return true;
 }
 
@@ -74,27 +76,114 @@ void MilitaryUnit::initPropertiesByType() {
             _attackDamage = 30;
             _attackRange = 150.0f;
             _attackCooldown = 2.0f;
+            _moveSpeed = 80.0f; // 移动速度
             break;
         case MilitaryType::ARCHER:
             _maxHealth = 40;
             _attackDamage = 15;
             _attackRange = 300.0f;
             _attackCooldown = 1.5f;
+            _moveSpeed = 100.0f;
             break;
         case MilitaryType::BARBARIAN:
             _maxHealth = 80;
             _attackDamage = 20;
             _attackRange = 100.0f;
             _attackCooldown = 1.0f;
+            _moveSpeed = 120.0f;
             break;
         case MilitaryType::GIANT:
             _maxHealth = 200;
             _attackDamage = 25;
             _attackRange = 120.0f;
             _attackCooldown = 2.5f;
+            _moveSpeed = 60.0f;
             break;
     }
     _health = _maxHealth;
+}
+
+BuildingType MilitaryUnit::getPreferredTarget() const {
+    switch (_type) {
+        case MilitaryType::BOMBER:
+            return BuildingType::ARCHER_TOWER; // 炸弹人优先攻击防御建筑
+        case MilitaryType::ARCHER:
+            return BuildingType::COMMAND_CENTER; // 弓箭手优先攻击司令部
+        case MilitaryType::BARBARIAN:
+            return BuildingType::GOLD_MINE; // 野蛮人优先攻击资源建筑
+        case MilitaryType::GIANT:
+            return BuildingType::CANNON; // 巨人优先攻击防御建筑
+        default:
+            return BuildingType::COMMAND_CENTER;
+    }
+}
+
+void MilitaryUnit::update(float delta) {
+    if (!isAlive()) return;
+
+    if (_attackTarget && _attackTarget->getHealth() > 0) {
+        float distance = _attackTarget->getPosition().distance(this->getPosition());
+
+        if (distance <= _attackRange) {
+            // 在攻击范围内，停止移动，开始攻击
+            _isMoving = false;
+            _isAttacking = true;
+            attackTarget(delta);
+        }
+        else {
+            // 不在攻击范围内，继续移动
+            _isMoving = true;
+            _isAttacking = false;
+            moveToTarget(delta);
+        }
+    }
+    else {
+        // 没有目标或目标已死亡，停止攻击
+        _isAttacking = false;
+    }
+}
+
+void MilitaryUnit::moveToTarget(float delta) {
+    if (!_attackTarget || !_isMoving) return;
+
+    Vec2 currentPos = this->getPosition();
+    Vec2 targetPos = _attackTarget->getPosition();
+
+    // 计算移动方向
+    Vec2 direction = targetPos - currentPos;
+    direction.normalize();
+
+    // 计算移动距离
+    float moveDistance = _moveSpeed * delta;
+
+    // 移动单位
+    this->setPosition(currentPos + direction * moveDistance);
+}
+
+void MilitaryUnit::attackTarget(float delta) {
+    if (!_attackTarget || !_isAttacking) return;
+
+    _attackTimer += delta;
+
+    if (_attackTimer >= _attackCooldown) {
+        // 攻击冷却完成，对建筑造成伤害
+        // 注意：这里需要Architecture类有takeDamage方法
+        // 暂时使用直接减少血量，后续需要在Architecture中添加takeDamage方法
+        int currentHealth = _attackTarget->getHealth();
+        _attackTarget->setHealth(currentHealth - _attackDamage);
+
+        // 重置攻击计时器
+        _attackTimer = 0.0f;
+
+        // 显示攻击效果（可以添加粒子效果或动画）
+        CCLOG("Military unit attacks building for %d damage!", _attackDamage);
+
+        // 如果建筑被摧毁
+        if (_attackTarget->getHealth() <= 0) {
+            _isAttacking = false;
+            _attackTarget = nullptr;
+        }
+    }
 }
 
 void MilitaryUnit::takeDamage(int damage) {
@@ -111,28 +200,11 @@ void MilitaryUnit::takeDamage(int damage) {
     if (_health <= 0) {
         // 死亡效果
         this->stopAllActions();
+        this->unscheduleUpdate();
         this->runAction(Sequence::create(
             FadeOut::create(0.5f),
             RemoveSelf::create(),
             nullptr
         ));
-    }
-}
-
-void MilitaryUnit::attack(float delta) {
-    _attackTimer += delta;
-    if (_attackTimer < _attackCooldown || !_attackTarget) return;
-
-    _attackTimer = 0;
-
-    // 检查目标是否有效
-    auto targetBuilding = dynamic_cast<Architecture*>(_attackTarget);
-    if (targetBuilding && targetBuilding->getHealth() > 0) {
-        float distance = targetBuilding->getPosition().distance(this->getPosition());
-        if (distance <= _attackRange) {
-            // 这里可以添加攻击动画
-            // 暂时只记录攻击日志
-            CCLOG("Military unit attacks building!");
-        }
     }
 }

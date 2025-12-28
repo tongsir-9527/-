@@ -57,11 +57,12 @@ public:
     }
 
     int getHealth() const { return _health; }
+    void setHealth(int health) { _health = health; }  // 添加设置血量方法
     int getMaxHealth() const { return _maxHealth; }
     int getDamage() const { return _damage; } // 防御建筑的伤害值
 
     void showLevelLabel();
-    void hideLevelLabel(); 
+    void hideLevelLabel();
 
 private:
     BuildingType _type;

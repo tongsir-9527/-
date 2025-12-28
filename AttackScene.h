@@ -1,4 +1,4 @@
-#ifndef __ATTACK_SCENE_H__
+ï»¿#ifndef __ATTACK_SCENE_H__
 #define __ATTACK_SCENE_H__
 
 #include "cocos2d.h"
@@ -21,10 +21,10 @@ private:
     cocos2d::Vec2 lastMousePos;
     cocos2d::Vec2 backgroundPos;
 
-    // ¹¥»÷·½½¨Öş
+    // é¦´åƒ»æºè†˜è€Ÿ
     std::vector<Architecture*> _attackBuildings;
 
-    // ·ÀÓù·½½¨Öş
+    // æ»…éƒ˜æºè†˜è€Ÿ
     struct DefenseBuilding {
         Architecture* building;
         float attackRange;
@@ -35,10 +35,10 @@ private:
     };
     std::vector<DefenseBuilding> _defenseBuildings;
 
-    // ¾ü¶Óµ¥Î»
+    // æ¿‚å‹¦ç­‰å¼‡
     std::vector<MilitaryUnit*> _militaryUnits;
 
-    // ¾ü¶ÓÉÌµêÏà¹Ø
+    // æ¿‚å‹¦å¦€è™›çœˆå£½
     cocos2d::ui::Button* _armyStoreButton;
     cocos2d::Layer* _armyStorePanel;
     cocos2d::ui::ScrollView* _armyScrollView;
@@ -46,7 +46,7 @@ private:
     MilitaryUnit* _draggingUnit;
     cocos2d::Vec2 _unitDragOffset;
 
-    // ×ÊÔ´ÏÔÊ¾
+    // è¨§åŸ­ç†å°¨
     int _armyCapacity;
     int _currentArmyCount;
     cocos2d::Label* _armyLabel;
@@ -57,34 +57,36 @@ private:
     bool onMouseUp(cocos2d::Event* event);
     void constrainBackgroundPosition();
 
-    // ³õÊ¼»¯¹¥»÷·½½¨Öş
+    // å ´å®è¶™é¦´åƒ»æºè†˜è€Ÿ
     void initAttackBuildings();
 
-    // Îª½¨ÖşÌí¼ÓÑªÌõ
+    // å³ˆè†˜è€Ÿæ°æ¨“æ‚›æ²­
     void addHealthBarToBuilding(Architecture* building);
 
-    // ¸üĞÂ·ÀÓù½¨ÖşĞĞÎª
+    // è¼‰é™”æ»…éƒ˜è†˜è€Ÿä¿´å³ˆ
     void updateDefenseBuildings(float delta);
-    // Ìí¼Ó¹¥»÷·¶Î§ÏÔÊ¾
+    // æ°æ¨“é¦´åƒ»æ¯“å³“ç†å°¨
     void addAttackRangeToBuilding(Architecture* building);
-    // ¸üĞÂ·ÀÓù½¨Öş¹¥»÷
+    // è¼‰é™”æ»…éƒ˜è†˜è€Ÿé¦´åƒ»
     void updateDefenseAttacks(float delta);
+    // è¼‰é™”æ¿‚å‹¦ç­‰å¼‡
+    void updateMilitaryUnits(float delta);
 
-    // ¾ü¶ÓÉÌµê¹¦ÄÜ
+    // æ¿‚å‹¦å¦€è™›é«¡å¤”
     void initArmyStore();
     void toggleArmyStorePanel();
     void onArmyStoreButtonClicked(cocos2d::Ref* sender);
     void onArmyUnitSelected(cocos2d::Ref* sender);
     void createMilitaryUnit(MilitaryType type);
 
-    // ·µ»Ø»ùµØ°´Å¥
+    // æ®¿éš™åƒ¹è¯åŒè½
     void menuBackCallback(cocos2d::Ref* pSender);
 
-    // Ìí¼Ó¾ü¶ÓÏÔÊ¾
+    // æ°æ¨“æ¿‚å‹¦ç†å°¨
     void addArmyDisplay(const cocos2d::Size& visibleSize, const cocos2d::Vec2& origin);
     void updateArmyDisplay();
 
-    // »ñÈ¡¾ü¶ÓÀàĞÍÃû³Æ£¨¾²Ì¬¸¨Öúº¯Êı£©
+    // é³³é¾°æ¿‚å‹¦æ¿¬å€°é¡å‚™ã„—å™™æ€“è½ç¿‘æ»²æ…ã„˜
     static std::string getMilitaryTypeName(MilitaryType type);
 };
 
