@@ -3,6 +3,7 @@
 #include "Architecture.h"
 #include "Store.h"
 #include <algorithm>
+#include "MouseEvent.h"
 USING_NS_CC;
 using namespace cocos2d::ui;
 
@@ -21,11 +22,6 @@ bool Base::init()
     auto visibleSize = Director::getInstance()->getVisibleSize();
     Vec2 origin = Director::getInstance()->getVisibleOrigin();
     scaleFactor = 1.0f;
-    isDragging = false;
-    _draggingBuilding = nullptr;
-    _selectedBuilding = nullptr;
-    _upgradeButton = nullptr;
-    _cancelButton = nullptr;
 
     background = Sprite::create("base_background.png");
     if (background)
@@ -42,14 +38,21 @@ bool Base::init()
         origin.y + visibleSize.height - label->getContentSize().height));
     this->addChild(label, 1);
 
-    // 返回按钮（左上角）- 修复：设置tag以便识别
+    // 返回按钮（左上角）
     auto backButton = Button::create("BackButton.png");
     if (backButton)
     {
         backButton->setPosition(Vec2(origin.x + backButton->getContentSize().width / 2 + 20,
             origin.y + visibleSize.height - backButton->getContentSize().height / 2 - 20));
         backButton->setTag(100); // 设置tag，用于识别
-        backButton->addClickEventListener(CC_CALLBACK_1(Base::menuBackCallback, this));
+        backButton->addClickEventListener([this](Ref* sender) {
+            CCLOG("返回按钮被点击");
+            auto helloWorldScene = HelloWorld::createScene();
+            if (helloWorldScene)
+            {
+                Director::getInstance()->replaceScene(TransitionFade::create(0.5f, helloWorldScene));
+            }
+            });
         this->addChild(backButton, 5);
     }
 
@@ -75,13 +78,6 @@ bool Base::init()
         this->addChild(attackButton, 5);
     }
 
-    auto listener = EventListenerMouse::create();
-    listener->onMouseScroll = CC_CALLBACK_1(Base::onMouseScroll, this);
-    listener->onMouseDown = CC_CALLBACK_1(Base::onMouseDown, this);
-    listener->onMouseMove = CC_CALLBACK_1(Base::onMouseMove, this);
-    listener->onMouseUp = CC_CALLBACK_1(Base::onMouseUp, this);
-    _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
-
     _gold = 100;
     _elixir = 80;
     _maxGold = 500;    // 初始最大容量
@@ -100,203 +96,37 @@ bool Base::init()
     _store = Store::create(this);
     this->addChild(_store, 5);
 
-    // 添加资源显示控件
+    // 创建鼠标事件处理器
+    _mouseEvent = MouseEvent::create(this);
+    if (_mouseEvent) {
+        _mouseEvent->setBackground(background);
+        _mouseEvent->setBackgroundPos(backgroundPos);
+        _mouseEvent->setScaleFactor(scaleFactor);
+        _mouseEvent->setBuildings(&_buildings);
+        _mouseEvent->setCommandCenter(_commandCenter);
+        _mouseEvent->setStore(_store);
+        _mouseEvent->setGold(&_gold);
+        _mouseEvent->setElixir(&_elixir);
+        _mouseEvent->setMaxGold(&_maxGold);
+        _mouseEvent->setMaxElixir(&_maxElixir);
+
+        // 添加鼠标事件监听器
+        auto listener = EventListenerMouse::create();
+        listener->onMouseScroll = CC_CALLBACK_1(MouseEvent::onMouseScroll, _mouseEvent);
+        listener->onMouseDown = CC_CALLBACK_1(MouseEvent::onMouseDown, _mouseEvent);
+        listener->onMouseMove = CC_CALLBACK_1(MouseEvent::onMouseMove, _mouseEvent);
+        listener->onMouseUp = CC_CALLBACK_1(MouseEvent::onMouseUp, _mouseEvent);
+        _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, _mouseEvent);
+
+        this->addChild(_mouseEvent);
+    }
+
+    // 添加资源显示组件
     addResourceDisplays(visibleSize, origin);
 
     // 定时更新资源显示
     this->schedule(schedule_selector(Base::updateResourceDisplays), 0.1f);
 
-    return true;
-}
-
-void Base::menuCloseCallback(Ref* pSender)
-{
-    Director::getInstance()->end();
-}
-
-void Base::menuBackCallback(Ref* pSender)
-{
-    CCLOG("返回按钮被点击");
-    auto helloWorldScene = HelloWorld::createScene();
-    if (helloWorldScene)
-    {
-        Director::getInstance()->replaceScene(TransitionFade::create(0.5f, helloWorldScene));
-    }
-}
-
-bool Base::onMouseScroll(Event* event)
-{
-    EventMouse* e = static_cast<EventMouse*>(event);
-    if (!background) return false;
-
-    float scrollY = e->getScrollY();
-
-    if (scrollY > 0)
-    {
-        scaleFactor *= 0.9f;
-        if (scaleFactor < 1.0f)
-            scaleFactor = 1.0f;
-    }
-    else if (scrollY < 0)
-    {
-        scaleFactor *= 1.1f;
-        if (scaleFactor > 3.0f)
-            scaleFactor = 3.0f;
-    }
-
-    background->setScale(scaleFactor);
-    constrainBackgroundPosition();
-
-    return true;
-}
-
-bool Base::onMouseMove(Event* event)
-{
-    if (!isDragging) return false;
-
-    EventMouse* e = static_cast<EventMouse*>(event);
-    Vec2 currentMousePos = Vec2(e->getCursorX(), e->getCursorY());
-    Vec2 delta = currentMousePos - lastMousePos;
-
-    if (_draggingBuilding) {
-        Vec2 backgroundPos = background->convertToNodeSpace(currentMousePos);
-        Vec2 newPos = backgroundPos - _buildingDragOffset;
-        _draggingBuilding->setPosition(newPos);
-    }
-    else if (background) {
-        Vec2 newPos = backgroundPos + delta;
-        backgroundPos = newPos;
-        constrainBackgroundPosition();
-        background->setPosition(backgroundPos);
-    }
-
-    lastMousePos = currentMousePos;
-    return true;
-}
-
-void Base::constrainBackgroundPosition()
-{
-    if (!background) return;
-
-    auto visibleSize = Director::getInstance()->getVisibleSize();
-    Vec2 origin = Director::getInstance()->getVisibleOrigin();
-
-    const float originalBgWidth = 1824.0f;
-    const float originalBgHeight = 1398.0f;
-
-    float scaledBgWidth = originalBgWidth * scaleFactor;
-    float scaledBgHeight = originalBgHeight * scaleFactor;
-
-    float gameMinX = origin.x;
-    float gameMaxX = origin.x + visibleSize.width;
-    float gameMinY = origin.y;
-    float gameMaxY = origin.y + visibleSize.height;
-
-    float minX = gameMinX + scaledBgWidth / 2;
-    float maxX = gameMaxX - scaledBgWidth / 2;
-    float minY = gameMinY + scaledBgHeight / 2;
-    float maxY = gameMaxY - scaledBgHeight / 2;
-
-    backgroundPos.x = clampf(backgroundPos.x, minX, maxX);
-    backgroundPos.y = clampf(backgroundPos.y, minY, maxY);
-    background->setPosition(backgroundPos);
-}
-
-bool Base::onMouseDown(Event* event)
-{
-    EventMouse* e = static_cast<EventMouse*>(event);
-    Vec2 mousePos = this->convertToNodeSpace(Vec2(e->getCursorX(), e->getCursorY()));
-
-    if (_upgradeButton && _upgradeButton->getBoundingBox().containsPoint(mousePos)) {
-        return true;
-    }
-
-    if (_cancelButton && _cancelButton->getBoundingBox().containsPoint(mousePos)) {
-        return true;
-    }
-
-    if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_LEFT)
-    {
-        // 修复：直接检查返回按钮和攻击按钮的点击
-        auto backButton = dynamic_cast<Button*>(this->getChildByTag(100));
-        if (backButton && backButton->getBoundingBox().containsPoint(mousePos)) {
-            menuBackCallback(backButton);
-            return true;
-        }
-
-        auto attackButton = dynamic_cast<Button*>(this->getChildByTag(101));
-        if (attackButton && attackButton->getBoundingBox().containsPoint(mousePos)) {
-            // 攻击按钮的点击事件已经在addClickEventListener中处理
-            return true;
-        }
-
-        if (_store && _store->getStoreButton() &&
-            _store->getStoreButton()->getBoundingBox().containsPoint(mousePos)) {
-            _store->onStoreButtonClicked(nullptr);
-            return true;
-        }
-
-        Vec2 bgMousePos = background->convertToNodeSpace(mousePos);
-        for (auto building : _buildings) {
-            if (building->getBoundingBox().containsPoint(bgMousePos)) {
-                _draggingBuilding = building;
-                _buildingDragOffset = building->convertToNodeSpace(bgMousePos);
-                isDragging = true;
-                lastMousePos = mousePos;
-                hideActionButtons();
-                return true;
-            }
-        }
-
-        isDragging = true;
-        lastMousePos = mousePos;
-        hideActionButtons();
-    }
-    else if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_RIGHT)
-    {
-        _rightClickStartPos = mousePos;
-        Vec2 bgMousePos = background->convertToNodeSpace(mousePos);
-
-        for (auto building : _buildings)
-        {
-            if (building->getBoundingBox().containsPoint(bgMousePos))
-            {
-                showActionButtons(building);
-                return true;
-            }
-        }
-        hideActionButtons();
-    }
-    return true;
-}
-
-bool Base::onMouseUp(Event* event)
-{
-    EventMouse* e = static_cast<EventMouse*>(event);
-    Vec2 mousePos = this->convertToNodeSpace(Vec2(e->getCursorX(), e->getCursorY()));
-
-    if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_LEFT)
-    {
-        isDragging = false;
-        _draggingBuilding = nullptr;
-    }
-    else if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_RIGHT)
-    {
-        float distance = mousePos.distance(_rightClickStartPos);
-        if (distance < _rightClickThreshold)
-        {
-            Vec2 bgMousePos = background->convertToNodeSpace(mousePos);
-            for (auto building : _buildings)
-            {
-                if (building->getBoundingBox().containsPoint(bgMousePos))
-                {
-                    showActionButtons(building);
-                    return true;
-                }
-            }
-            hideActionButtons();
-        }
-    }
     return true;
 }
 
@@ -335,7 +165,7 @@ void Base::createBuilding(BuildingType type)
             }
             else
             {
-                errorMsg = "建造失败，金币资源不足";
+                errorMsg = "建造失败，黄金资源不足";
             }
             break;
         case BuildingType::ELIXIR_COLLECTOR:
@@ -346,7 +176,7 @@ void Base::createBuilding(BuildingType type)
             }
             else
             {
-                errorMsg = "建造失败，圣水资源不足";
+                errorMsg = "建造失败，药水资源不足";
             }
             break;
         case BuildingType::BARRACKS:
@@ -357,7 +187,7 @@ void Base::createBuilding(BuildingType type)
             }
             else
             {
-                errorMsg = "建造失败，金币资源不足";
+                errorMsg = "建造失败，黄金资源不足";
             }
             break;
         case BuildingType::ARCHER_TOWER:
@@ -368,7 +198,7 @@ void Base::createBuilding(BuildingType type)
             }
             else
             {
-                errorMsg = "建造失败，金币资源不足";
+                errorMsg = "建造失败，黄金资源不足";
             }
             break;
         case BuildingType::CANNON:
@@ -379,7 +209,7 @@ void Base::createBuilding(BuildingType type)
             }
             else
             {
-                errorMsg = "建造失败，金币资源不足";
+                errorMsg = "建造失败，黄金资源不足";
             }
             break;
         case BuildingType::VAULT:
@@ -390,7 +220,7 @@ void Base::createBuilding(BuildingType type)
             }
             else
             {
-                errorMsg = "建造失败，金币资源不足";
+                errorMsg = "建造失败，黄金资源不足";
             }
             break;
         case BuildingType::ELIXIR_FONT:
@@ -401,7 +231,7 @@ void Base::createBuilding(BuildingType type)
             }
             else
             {
-                errorMsg = "建造失败，圣水资源不足";
+                errorMsg = "建造失败，药水资源不足";
             }
             break;
         default:
@@ -465,7 +295,7 @@ void Base::createBuilding(BuildingType type)
         background->addChild(newBuilding, 1);
         _buildings.push_back(newBuilding);
 
-        // 如果是金库或圣水罐，更新存储容量
+        // 如果是金库或药水井，更新存储容量
         if (type == BuildingType::VAULT || type == BuildingType::ELIXIR_FONT) {
             updateStorageCapacity();
         }
@@ -474,7 +304,7 @@ void Base::createBuilding(BuildingType type)
 
 bool Base::canBuildMore(BuildingType type)
 {
-    // 司令部等级决定可建造数量
+    // 指挥中心等级决定可建造数量
     int maxCount = getCommandCenterLevel();
     if (maxCount == 0) return false;
 
@@ -528,193 +358,6 @@ void Base::toggleStorePanel()
 }
 
 void Base::initBuildingScrollContent()
-{
-}
-
-void Base::showActionButtons(Architecture* building)
-{
-    hideActionButtons();
-    _selectedBuilding = building;
-
-    building->showLevelLabel();
-
-    _upgradeButton = Button::create("UpgradeButton.png");
-    _upgradeButton->setPosition(Vec2(building->getPositionX() + 60, building->getPositionY()));
-    _upgradeButton->addClickEventListener([this](Ref* sender) {
-        if (_selectedBuilding && isUpgradePossible(_selectedBuilding->getType()))
-        {
-            _selectedBuilding->upgrade();
-
-            // 如果是金库或圣水罐，更新存储容量
-            if (_selectedBuilding->getType() == BuildingType::VAULT ||
-                _selectedBuilding->getType() == BuildingType::ELIXIR_FONT) {
-                updateStorageCapacity();
-            }
-
-            hideActionButtons();
-        }
-        });
-    this->addChild(_upgradeButton, 20);
-
-    _cancelButton = Button::create("CancelButton.png");
-    _cancelButton->setPosition(Vec2(building->getPositionX() - 60, building->getPositionY()));
-    _cancelButton->addClickEventListener([this, building](Ref* sender) {
-        if (building->getType() == BuildingType::COMMAND_CENTER) {
-            auto visibleSize = Director::getInstance()->getVisibleSize();
-            auto origin = Director::getInstance()->getVisibleOrigin();
-
-            auto label = Label::createWithTTF("司令部不能删除！", "fonts/Marker Felt.ttf", 36);
-            label->setPosition(Vec2(origin.x + visibleSize.width / 2,
-                origin.y + visibleSize.height / 2));
-            label->setColor(Color3B::RED);
-            this->addChild(label, 1000);
-
-            label->runAction(Sequence::create(
-                DelayTime::create(2.0f),
-                FadeOut::create(0.5f),
-                RemoveSelf::create(),
-                nullptr
-            ));
-            return;
-        }
-
-        hideActionButtons();
-
-        auto it = std::find(_buildings.begin(), _buildings.end(), building);
-        if (it != _buildings.end()) {
-            _buildings.erase(it);
-        }
-
-        // 如果是金库或圣水罐，更新存储容量
-        if (building->getType() == BuildingType::VAULT ||
-            building->getType() == BuildingType::ELIXIR_FONT) {
-            updateStorageCapacity();
-        }
-
-        building->runAction(Sequence::create(
-            FadeOut::create(0.2f),
-            CallFunc::create([building]() {
-                building->removeFromParentAndCleanup(true);
-                }),
-            nullptr
-        ));
-        });
-    this->addChild(_cancelButton, 20);
-}
-
-void Base::hideActionButtons()
-{
-    if (_upgradeButton)
-    {
-        _upgradeButton->removeFromParent();
-        _upgradeButton = nullptr;
-    }
-    if (_cancelButton)
-    {
-        _cancelButton->removeFromParent();
-        _cancelButton = nullptr;
-    }
-    if (_selectedBuilding) {
-        _selectedBuilding->hideLevelLabel();
-    }
-    _selectedBuilding = nullptr;
-}
-
-int Base::calculateUpgradeCost(BuildingType type, int currentLevel)
-{
-    if (currentLevel >= 3) return 0; // 最大等级
-
-    int baseCost = 0;
-    switch (type)
-    {
-        case BuildingType::GOLD_MINE: baseCost = GOLD_MINE_UPGRADE_BASE; break;
-        case BuildingType::ELIXIR_COLLECTOR: baseCost = ELIXIR_COLLECTOR_UPGRADE_BASE; break;
-        case BuildingType::BARRACKS: baseCost = BARRACKS_UPGRADE_BASE; break;
-        case BuildingType::ARCHER_TOWER: baseCost = ARCHER_TOWER_UPGRADE_BASE; break;
-        case BuildingType::CANNON: baseCost = CANNON_UPGRADE_BASE; break;
-        case BuildingType::VAULT: baseCost = VAULT_UPGRADE_BASE; break;
-        case BuildingType::ELIXIR_FONT: baseCost = ELIXIR_FONT_UPGRADE_BASE; break;
-        case BuildingType::COMMAND_CENTER: baseCost = COMMAND_CENTER_UPGRADE_BASE; break;
-        default: return 0;
-    }
-
-    // 每升一级资源×10
-    return baseCost * pow(10, currentLevel - 1);
-}
-
-bool Base::isUpgradePossible(BuildingType type)
-{
-    if (!_selectedBuilding) return false;
-
-    int currentLevel = _selectedBuilding->getLevel();
-    if (currentLevel >= _selectedBuilding->getMaxLevel()) {
-        auto visibleSize = Director::getInstance()->getVisibleSize();
-        auto origin = Director::getInstance()->getVisibleOrigin();
-
-        auto label = Label::createWithTTF("已达到最大等级", "fonts/Marker Felt.ttf", 36);
-        label->setPosition(Vec2(origin.x + visibleSize.width / 2,
-            origin.y + visibleSize.height / 2));
-        label->setColor(Color3B::YELLOW);
-        this->addChild(label, 1000);
-
-        label->runAction(Sequence::create(
-            DelayTime::create(2.0f),
-            FadeOut::create(0.5f),
-            RemoveSelf::create(),
-            nullptr
-        ));
-        return false;
-    }
-
-    int requiredGold = 0;
-    int requiredElixir = 0;
-
-    // 根据建筑类型计算所需资源
-    switch (type)
-    {
-        case BuildingType::GOLD_MINE:
-        case BuildingType::BARRACKS:
-        case BuildingType::ARCHER_TOWER:
-        case BuildingType::CANNON:
-        case BuildingType::VAULT:
-        case BuildingType::COMMAND_CENTER:
-            requiredGold = calculateUpgradeCost(type, currentLevel);
-            break;
-        case BuildingType::ELIXIR_COLLECTOR:
-        case BuildingType::ELIXIR_FONT:
-            requiredElixir = calculateUpgradeCost(type, currentLevel);
-            break;
-        default: return false;
-    }
-
-    if (_gold >= requiredGold && _elixir >= requiredElixir)
-    {
-        _gold -= requiredGold;
-        _elixir -= requiredElixir;
-        return true;
-    }
-    else
-    {
-        auto visibleSize = Director::getInstance()->getVisibleSize();
-        auto origin = Director::getInstance()->getVisibleOrigin();
-
-        auto label = Label::createWithTTF("升级失败，资源不足", "fonts/Marker Felt.ttf", 36);
-        label->setPosition(Vec2(origin.x + visibleSize.width / 2,
-            origin.y + visibleSize.height / 2));
-        label->setColor(Color3B::RED);
-        this->addChild(label, 1000);
-
-        label->runAction(Sequence::create(
-            DelayTime::create(2.0f),
-            FadeOut::create(0.5f),
-            RemoveSelf::create(),
-            nullptr
-        ));
-        return false;
-    }
-}
-
-void Base::refundResources(BuildingType type, int level)
 {
 }
 
@@ -799,4 +442,26 @@ void Base::updateResourceDisplays(float delta)
 
     if (_elixirLabel) _elixirLabel->setString(std::to_string(_elixir) + "/" + std::to_string(_maxElixir));
     if (_elixirBar) _elixirBar->setPercent(std::min(100.0f, (_elixir * 100.0f) / _maxElixir));
+}
+
+int Base::calculateUpgradeCost(BuildingType type, int currentLevel)
+{
+    if (currentLevel >= 3) return 0; // 最大等级
+
+    int baseCost = 0;
+    switch (type)
+    {
+        case BuildingType::GOLD_MINE: baseCost = GOLD_MINE_UPGRADE_BASE; break;
+        case BuildingType::ELIXIR_COLLECTOR: baseCost = ELIXIR_COLLECTOR_UPGRADE_BASE; break;
+        case BuildingType::BARRACKS: baseCost = BARRACKS_UPGRADE_BASE; break;
+        case BuildingType::ARCHER_TOWER: baseCost = ARCHER_TOWER_UPGRADE_BASE; break;
+        case BuildingType::CANNON: baseCost = CANNON_UPGRADE_BASE; break;
+        case BuildingType::VAULT: baseCost = VAULT_UPGRADE_BASE; break;
+        case BuildingType::ELIXIR_FONT: baseCost = ELIXIR_FONT_UPGRADE_BASE; break;
+        case BuildingType::COMMAND_CENTER: baseCost = COMMAND_CENTER_UPGRADE_BASE; break;
+        default: return 0;
+    }
+
+    // 每升一级资源×10
+    return baseCost * pow(10, currentLevel - 1);
 }
