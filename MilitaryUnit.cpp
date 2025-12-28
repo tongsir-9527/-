@@ -20,6 +20,7 @@ bool MilitaryUnit::init(MilitaryType type) {
     _type = type;
     _attackTimer = 0;
     _attackTarget = nullptr;
+    _healthBar = nullptr;
     initPropertiesByType();
 
     // 设置单位纹理
@@ -38,35 +39,28 @@ bool MilitaryUnit::init(MilitaryType type) {
             imgPath = "Giant.png";
             break;
         default:
-            imgPath = "UnknownUnit.png";
+            imgPath = "CloseNormal.png"; // 备用纹理
     }
 
     if (!this->initWithFile(imgPath)) {
-        return false;
+        // 如果纹理加载失败，创建一个颜色块作为占位符
+        auto placeholder = LayerColor::create(Color4B(100, 100, 200, 255), 50, 50);
+        this->addChild(placeholder);
     }
 
-    // 创建血量条
-    auto healthBarBg = LayerColor::create(Color4B(255, 0, 0, 255), getContentSize().width, 5);
-    healthBarBg->setPosition(Vec2(-getContentSize().width / 2, getContentSize().height / 2 + 10));
-    addChild(healthBarBg);
+    // 创建血量条背景（红色）
+    auto healthBarBg = LayerColor::create(Color4B(255, 0, 0, 255), this->getContentSize().width, 5);
+    if (healthBarBg) {
+        healthBarBg->setPosition(Vec2(-this->getContentSize().width / 2, this->getContentSize().height / 2 + 10));
+        this->addChild(healthBarBg);
+    }
 
-    // 1. 创建一个100x20的绿色纹理（宽高根据需求调整）
-    auto rt = RenderTexture::create(100, 20);
-    rt->beginWithClear(0, 255, 0, 255); // RGBA值（绿色不透明）
-    rt->end();
-
-    // 2. 用纹理创建Sprite
-    auto healthBarSprite = Sprite::createWithTexture(rt->getSprite()->getTexture());
-
-    // 3. 初始化进度条
-    _healthBar = ProgressTimer::create(healthBarSprite);    
-    _healthBar->setType(ProgressTimer::Type::BAR);
-    _healthBar->setMidpoint(Vec2(0, 0.5f));
-    _healthBar->setBarChangeRate(Vec2(1, 0));
-    _healthBar->setPercentage(100);
-    _healthBar->setContentSize(healthBarBg->getContentSize());
-    _healthBar->setPosition(healthBarBg->getContentSize() / 2);
-    healthBarBg->addChild(_healthBar);
+    // 创建血量条前景（绿色）
+    _healthBar = LayerColor::create(Color4B(0, 255, 0, 255), this->getContentSize().width, 5);
+    if (_healthBar) {
+        _healthBar->setPosition(Vec2(-this->getContentSize().width / 2, this->getContentSize().height / 2 + 10));
+        this->addChild(_healthBar);
+    }
 
     // 启动攻击计时器
     this->schedule(schedule_selector(MilitaryUnit::attack), 0.5f);
@@ -106,7 +100,13 @@ void MilitaryUnit::initPropertiesByType() {
 void MilitaryUnit::takeDamage(int damage) {
     _health -= damage;
     if (_health < 0) _health = 0;
-    _healthBar->setPercentage((float)_health / _maxHealth * 100);
+
+    // 更新血条
+    if (_healthBar) {
+        float healthPercent = (float)_health / _maxHealth;
+        float newWidth = this->getContentSize().width * healthPercent;
+        _healthBar->setContentSize(Size(newWidth, 5));
+    }
 
     if (_health <= 0) {
         // 死亡效果
@@ -124,8 +124,15 @@ void MilitaryUnit::attack(float delta) {
     if (_attackTimer < _attackCooldown || !_attackTarget) return;
 
     _attackTimer = 0;
-    // 简单攻击逻辑（实际项目中可添加伤害判定）
-    if (_attackTarget->getPosition().distance(getPosition()) <= _attackRange) {
-        // 这里可以添加攻击动画和伤害处理
+
+    // 检查目标是否有效
+    auto targetBuilding = dynamic_cast<Architecture*>(_attackTarget);
+    if (targetBuilding && targetBuilding->getHealth() > 0) {
+        float distance = targetBuilding->getPosition().distance(this->getPosition());
+        if (distance <= _attackRange) {
+            // 这里可以添加攻击动画
+            // 暂时只记录攻击日志
+            CCLOG("Military unit attacks building!");
+        }
     }
 }
