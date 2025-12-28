@@ -53,7 +53,8 @@ private:
     Architecture* _commandCenter;
     Architecture* _draggingBuilding;
     cocos2d::Vec2 _buildingDragOffset;
-
+    cocos2d::ui::Button* _pressedButton; // 记录按下的按钮
+    bool _pressedStoreButton; // 记录是否按下了商店按钮
     Store* _store;
     Architecture* _selectedBuilding;
     cocos2d::ui::Button* _upgradeButton;

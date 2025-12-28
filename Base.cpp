@@ -45,14 +45,7 @@ bool Base::init()
         backButton->setPosition(Vec2(origin.x + backButton->getContentSize().width / 2 + 20,
             origin.y + visibleSize.height - backButton->getContentSize().height / 2 - 20));
         backButton->setTag(100); // 设置tag，用于识别
-        backButton->addClickEventListener([this](Ref* sender) {
-            CCLOG("返回按钮被点击");
-            auto helloWorldScene = HelloWorld::createScene();
-            if (helloWorldScene)
-            {
-                Director::getInstance()->replaceScene(TransitionFade::create(0.5f, helloWorldScene));
-            }
-            });
+        // 移除 addClickEventListener，让 MouseEvent 处理
         this->addChild(backButton, 5);
     }
 
@@ -65,15 +58,7 @@ bool Base::init()
         attackButton->setPosition(Vec2(origin.x + attackButton->getContentSize().width / 2 + 20, attackButtonY));
         attackButton->setTag(101); // 设置tag
 
-        // 修复：使用lambda函数处理点击事件
-        attackButton->addClickEventListener([this](Ref* sender) {
-            CCLOG("攻击按钮被点击");
-            auto attackScene = AttackScene::createScene();
-            if (attackScene)
-            {
-                Director::getInstance()->replaceScene(TransitionFade::create(0.5f, attackScene));
-            }
-            });
+        // 移除 addClickEventListener，让 MouseEvent 处理
 
         this->addChild(attackButton, 5);
     }

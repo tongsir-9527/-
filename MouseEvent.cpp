@@ -32,6 +32,8 @@ bool MouseEvent::init(Base* baseScene)
     _selectedBuilding = nullptr;
     _upgradeButton = nullptr;
     _cancelButton = nullptr;
+    _pressedButton = nullptr;
+    _pressedStoreButton = false;
     background = nullptr;
     scaleFactor = nullptr;
     backgroundPos = nullptr;
@@ -130,36 +132,39 @@ bool MouseEvent::onMouseDown(Event* event)
     Vec2 mousePos = _baseScene->convertToNodeSpace(Vec2(e->getCursorX(), e->getCursorY()));
 
     if (_upgradeButton && _upgradeButton->getBoundingBox().containsPoint(mousePos)) {
-        return true;
+        return true; // 优先处理升级按钮
     }
 
     if (_cancelButton && _cancelButton->getBoundingBox().containsPoint(mousePos)) {
+        return true; // 优先处理取消按钮
+    }
+
+    // 检查返回按钮
+    auto backButton = dynamic_cast<cocos2d::ui::Button*>(_baseScene->getChildByTag(100));
+    if (backButton && backButton->getBoundingBox().containsPoint(mousePos)) {
+        // 标记按下了返回按钮，在onMouseUp中处理
+        _pressedButton = backButton;
+        return true;
+    }
+
+    // 检查攻击按钮
+    auto attackButton = dynamic_cast<cocos2d::ui::Button*>(_baseScene->getChildByTag(101));
+    if (attackButton && attackButton->getBoundingBox().containsPoint(mousePos)) {
+        // 标记按下了攻击按钮，在onMouseUp中处理
+        _pressedButton = attackButton;
+        return true;
+    }
+
+    // 检查商店按钮
+    if (_store && _store->getStoreButton() &&
+        _store->getStoreButton()->getBoundingBox().containsPoint(mousePos)) {
+        // 商店按钮在mouse up时处理
+        _pressedStoreButton = true;
         return true;
     }
 
     if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_LEFT)
     {
-        // 检查是否点击了返回按钮
-        auto backButton = dynamic_cast<cocos2d::ui::Button*>(_baseScene->getChildByTag(100));
-        if (backButton && backButton->getBoundingBox().containsPoint(mousePos)) {
-            menuBackCallback(backButton);
-            return true;
-        }
-
-        // 检查是否点击了攻击按钮
-        auto attackButton = dynamic_cast<cocos2d::ui::Button*>(_baseScene->getChildByTag(101));
-        if (attackButton && attackButton->getBoundingBox().containsPoint(mousePos)) {
-            // 攻击按钮的点击事件已经在addClickEventListener中处理
-            return true;
-        }
-
-        // 检查是否点击了商店按钮
-        if (_store && _store->getStoreButton() &&
-            _store->getStoreButton()->getBoundingBox().containsPoint(mousePos)) {
-            _store->onStoreButtonClicked(nullptr);
-            return true;
-        }
-
         // 检查是否点击了建筑
         Vec2 bgMousePos = background->convertToNodeSpace(mousePos);
         for (auto building : *_buildings) {
@@ -202,6 +207,43 @@ bool MouseEvent::onMouseUp(Event* event)
 
     if (e->getMouseButton() == EventMouse::MouseButton::BUTTON_LEFT)
     {
+        // 处理按钮点击（在mouse up时）
+        // 检查是否点击了返回按钮
+        auto backButton = dynamic_cast<cocos2d::ui::Button*>(_baseScene->getChildByTag(100));
+        if (backButton && backButton->getBoundingBox().containsPoint(mousePos) &&
+            backButton == _pressedButton) {
+            menuBackCallback(backButton);
+            _pressedButton = nullptr;
+            return true;
+        }
+
+        // 检查是否点击了攻击按钮
+        auto attackButton = dynamic_cast<cocos2d::ui::Button*>(_baseScene->getChildByTag(101));
+        if (attackButton && attackButton->getBoundingBox().containsPoint(mousePos) &&
+            attackButton == _pressedButton) {
+            CCLOG("攻击按钮被点击");
+            auto attackScene = AttackScene::createScene();
+            if (attackScene)
+            {
+                Director::getInstance()->replaceScene(TransitionFade::create(0.5f, attackScene));
+            }
+            _pressedButton = nullptr;
+            return true;
+        }
+
+        // 检查商店按钮
+        if (_store && _store->getStoreButton() &&
+            _store->getStoreButton()->getBoundingBox().containsPoint(mousePos) &&
+            _pressedStoreButton) {
+            _store->onStoreButtonClicked(nullptr);
+            _pressedStoreButton = false;
+            return true;
+        }
+
+        // 清空按钮标记
+        _pressedButton = nullptr;
+        _pressedStoreButton = false;
+
         isDragging = false;
         _draggingBuilding = nullptr;
     }
