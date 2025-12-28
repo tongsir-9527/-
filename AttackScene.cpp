@@ -2,10 +2,11 @@
 #include "Base.h"
 #include "HelloWorldScene.h"
 #include <algorithm>
+#include "SimpleAudioEngine.h"
 
 USING_NS_CC;
 using namespace cocos2d::ui;
-
+using namespace CocosDenshion;
 Scene* AttackScene::createScene()
 {
     return AttackScene::create();
@@ -121,6 +122,10 @@ bool AttackScene::init()
     _placingHintLabel->setColor(Color3B::YELLOW);
     _placingHintLabel->setVisible(false);
     this->addChild(_placingHintLabel, 10);
+
+    // 播放背景音乐
+    SimpleAudioEngine::getInstance()->playBackgroundMusic("audio/Battle.mp3", true);
+
     return true;
 }
 
@@ -794,6 +799,9 @@ void AttackScene::menuBackCallback(cocos2d::Ref* pSender)
         return;
     }
 
+    // 停止背景音乐
+    SimpleAudioEngine::getInstance()->stopBackgroundMusic();
+
     // 保存当前圣水到用户默认值
     cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
     cocos2d::UserDefault::getInstance()->flush();
@@ -1015,11 +1023,13 @@ void AttackScene::checkDefeatCondition(float delta)
 }
 
 // 显示胜利场景
-// 在showVictoryScene()函数中，添加圣水重置：
 void AttackScene::showVictoryScene()
 {
     auto visibleSize = Director::getInstance()->getVisibleSize();
     Vec2 origin = Director::getInstance()->getVisibleOrigin();
+
+    // 停止背景音乐
+    SimpleAudioEngine::getInstance()->stopBackgroundMusic();
 
     // 创建胜利层（覆盖整个屏幕）
     auto victoryLayer = LayerColor::create(Color4B(0, 0, 0, 200), visibleSize.width, visibleSize.height);
@@ -1076,6 +1086,9 @@ void AttackScene::showVictoryScene()
 
 void AttackScene::handleDefeat()
 {
+    // 停止背景音乐
+    SimpleAudioEngine::getInstance()->stopBackgroundMusic();
+
     // 显示失败消息
     showMessage("DEFEAT! All units destroyed.", Color3B::RED);
 

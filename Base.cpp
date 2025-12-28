@@ -4,14 +4,14 @@
 #include "Store.h"
 #include <algorithm>
 #include "MouseEvent.h"
+#include "SimpleAudioEngine.h"
 USING_NS_CC;
 using namespace cocos2d::ui;
-
+using namespace CocosDenshion;
 Scene* Base::createScene()
 {
     return Base::create();
 }
-
 bool Base::init()
 {
     if (!Scene::init())
@@ -69,12 +69,11 @@ bool Base::init()
     _maxGold = 500;    // 初始最大容量
     _maxElixir = 400;  // 初始最大容量
 
-//初始化圣水为80并保存
- 
-        UserDefault::getInstance()->setIntegerForKey("elixir", 80);
-        UserDefault::getInstance()->setBoolForKey("game_initialized", true);
-        UserDefault::getInstance()->flush();
-    
+    // 初始化圣水为80并保存
+    UserDefault::getInstance()->setIntegerForKey("elixir", 80);
+    UserDefault::getInstance()->setBoolForKey("game_initialized", true);
+    UserDefault::getInstance()->flush();
+
     _commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
     if (_commandCenter) {
         _commandCenter->setPosition(Vec2(background->getContentSize().width / 2,
@@ -119,9 +118,11 @@ bool Base::init()
     // 定时更新资源显示
     this->schedule(schedule_selector(Base::updateResourceDisplays), 0.1f);
 
+    // 播放背景音乐
+    SimpleAudioEngine::getInstance()->playBackgroundMusic("audio/Battle.mp3", true);
+
     return true;
 }
-
 void Base::createBuilding(BuildingType type)
 {
     // 检查是否达到建造上限
@@ -469,6 +470,9 @@ int Base::calculateUpgradeCost(BuildingType type, int currentLevel)
 void Base::onExit()
 {
     Scene::onExit();
+
+    // 停止背景音乐
+    SimpleAudioEngine::getInstance()->stopBackgroundMusic();
 
     // 保存圣水到UserDefault
     UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);

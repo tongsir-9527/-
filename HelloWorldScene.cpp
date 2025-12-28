@@ -4,6 +4,8 @@
 #include "Base.h"
 USING_NS_CC;//相当于using namespace std，这样就不用输入cocos2d::了
 
+using namespace CocosDenshion; // 添加这行
+
 Scene* HelloWorld::createScene()
 {
     return HelloWorld::create();
@@ -22,7 +24,7 @@ bool HelloWorld::init()
     //////////////////////////////
     // 1. super init first
     if (!Scene::init())
-    { 
+    {
         return false;
     }
 
@@ -57,7 +59,7 @@ bool HelloWorld::init()
     menu->setPosition(Vec2::ZERO);
     this->addChild(menu, 1);
 
-// Clash Of Clans 标题
+    // Clash Of Clans 标题
     auto label = Label::createWithTTF("Clash Of Clans", "fonts/Marker Felt.ttf", 248);
     if (label == nullptr)
     {
@@ -73,7 +75,7 @@ bool HelloWorld::init()
         this->addChild(label, 1);
     }
 
-// 部落冲突封面
+    // 部落冲突封面
     auto sprite = Sprite::create("ClashOfClansCover.png");
     if (sprite == nullptr)
     {
@@ -87,7 +89,8 @@ bool HelloWorld::init()
         // add the sprite as a child to this layer
         this->addChild(sprite, 0);
     }
-// 开始游戏按钮
+
+    // 开始游戏按钮
     auto startButton = ui::Button::create("StartGame.png");
     if (startButton == nullptr)
     {
@@ -101,6 +104,9 @@ bool HelloWorld::init()
 
         // 点击后跳转到 Base 场景
         startButton->addClickEventListener([](Ref* sender) {
+            // 停止当前背景音乐
+            SimpleAudioEngine::getInstance()->stopBackgroundMusic();
+
             // 创建 Base 场景
             auto baseScene = Base::createScene();
             if (baseScene)
@@ -113,12 +119,18 @@ bool HelloWorld::init()
         // 将按钮添加到场景中
         this->addChild(startButton, 1); // zOrder 设为 1，确保在封面图上方显示
     }
+
+    // 播放背景音乐
+    SimpleAudioEngine::getInstance()->playBackgroundMusic("audio/Start.mp3", true);
+
     return true;
 }
 
-
 void HelloWorld::menuCloseCallback(Ref* pSender)
 {
+    // 停止背景音乐
+    SimpleAudioEngine::getInstance()->stopBackgroundMusic();
+
     //Close the cocos2d-x game scene and quit the application
     Director::getInstance()->end();
 
@@ -126,5 +138,4 @@ void HelloWorld::menuCloseCallback(Ref* pSender)
 
     //EventCustom customEndEvent("game_scene_close_event");
     //_eventDispatcher->dispatchEvent(&customEndEvent);
-
 }
