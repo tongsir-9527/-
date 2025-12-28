@@ -98,39 +98,134 @@ bool AttackScene::init()
 
     return true;
 }
+void AttackScene::addAttackRangeToBuilding(Architecture* building)
+{
+    float range = 0.0f;
+    Color4F rangeColor;
 
+    if (building->getType() == BuildingType::ARCHER_TOWER)
+    {
+        range = 250.0f;
+        // 使用与绿色对比度强的紫色
+        rangeColor = Color4F(0.8f, 0.0f, 0.8f, 0.3f); // 紫色半透明
+    }
+    else if (building->getType() == BuildingType::CANNON)
+    {
+        range = 150.0f;
+        // 使用与绿色对比度强的橙色
+        rangeColor = Color4F(1.0f, 0.5f, 0.0f, 0.3f); // 橙色半透明
+    }
+    else
+    {
+        return; // 不是防御建筑，不添加范围显示
+    }
+
+    // 创建圆形范围显示
+    auto rangeCircle = DrawNode::create();
+    rangeCircle->drawCircle(Vec2::ZERO, range, 0, 32, false, 2.0f, 2.0f, rangeColor);
+    rangeCircle->setVisible(false); // 默认隐藏，需要时可显示
+
+    // 添加白色边框以提高可见性
+    rangeCircle->drawCircle(Vec2::ZERO, range, 0, 32, false, 1.0f, 1.0f, Color4F(1.0f, 1.0f, 1.0f, 0.5f));
+
+    building->addChild(rangeCircle, -1);
+
+    // 添加标签显示攻击范围信息
+    auto rangeLabel = Label::createWithTTF(std::to_string(static_cast<int>(range)),
+        "fonts/Marker Felt.ttf", 20);
+    rangeLabel->setPosition(Vec2(0, -range - 20));
+    rangeLabel->setColor(Color3B::WHITE);
+    rangeLabel->setVisible(false);
+    rangeCircle->addChild(rangeLabel);
+
+    // 存储范围引用（可以使用tag来区分）
+    rangeCircle->setTag(999); // 为攻击范围设置特殊tag
+}
 void AttackScene::initAttackBuildings()
 {
-    // 创建一些防御建筑作为测试
-    auto createDefenseBuilding = [&](BuildingType type, Vec2 position) {
-        auto building = Architecture::create(type, 1);
-        if (building) {
-            building->setPosition(position);
+    // 清空现有建筑
+    _attackBuildings.clear();
+    _defenseBuildings.clear();
+
+    // 背景中心位置
+    Vec2 centerPos = Vec2(background->getContentSize().width / 2,
+        background->getContentSize().height / 2);
+
+    // 1. 在中心放置司令部
+    Architecture* commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
+    if (commandCenter)
+    {
+        commandCenter->setPosition(centerPos);
+        background->addChild(commandCenter, 1);
+        _attackBuildings.push_back(commandCenter);
+
+        // 为司令部添加血条
+        addHealthBarToBuilding(commandCenter);
+    }
+
+    // 建筑放置的半径和角度间隔
+    float radius = 200.0f;
+    int numBuildings = 6;
+    float angleStep = 360.0f / numBuildings;
+
+    // 建筑类型列表（周围一圈的6种建筑）
+    std::vector<BuildingType> buildingTypes = {
+        BuildingType::ARCHER_TOWER,    // 弓箭塔
+        BuildingType::CANNON,          // 加农炮
+        BuildingType::GOLD_MINE,       // 金矿
+        BuildingType::ELIXIR_FONT,     // 圣水罐
+        BuildingType::VAULT,           // 金库
+        BuildingType::ELIXIR_COLLECTOR // 圣水收集器
+    };
+
+    // 2. 在周围一圈放置其他建筑
+    for (int i = 0; i < numBuildings; ++i)
+    {
+        float angle = CC_DEGREES_TO_RADIANS(angleStep * i);
+        Vec2 buildingPos = centerPos + Vec2(radius * cos(angle), radius * sin(angle));
+
+        Architecture* building = Architecture::create(buildingTypes[i], 1);
+        if (building)
+        {
+            building->setPosition(buildingPos);
             background->addChild(building, 1);
             _attackBuildings.push_back(building);
 
-            // 添加血条
+            // 为建筑添加血条
             addHealthBarToBuilding(building);
 
-            // 如果是防御建筑，添加到防御建筑列表
-            if (type == BuildingType::ARCHER_TOWER || type == BuildingType::CANNON) {
+            // 为防御建筑添加攻击范围显示和防御属性（仅弓箭塔和加农炮）
+            if (buildingTypes[i] == BuildingType::ARCHER_TOWER ||
+                buildingTypes[i] == BuildingType::CANNON)
+            {
+                // 添加攻击范围显示（与绿色对比度强的颜色）
+                addAttackRangeToBuilding(building);
+
+                // 初始化防御建筑属性
                 DefenseBuilding defense;
                 defense.building = building;
-                defense.attackRange = 200.0f;
-                defense.attackDamage = building->getDamage();
-                defense.attackInterval = 2.0f;
                 defense.lastAttackTime = 0;
-                defense.attackType = (type == BuildingType::ARCHER_TOWER) ? "range" : "splash";
+
+                // 设置防御建筑属性
+                if (buildingTypes[i] == BuildingType::ARCHER_TOWER)
+                {
+                    defense.attackRange = 250.0f;      // 弓箭塔范围大
+                    defense.attackDamage = 10.0f;      // 伤害低
+                    defense.attackInterval = 1.0f;     // 频率高（每秒攻击）
+                    defense.attackType = "ARCHER";
+                }
+                else if (buildingTypes[i] == BuildingType::CANNON)
+                {
+                    defense.attackRange = 150.0f;      // 加农炮范围小
+                    defense.attackDamage = 30.0f;      // 伤害高
+                    defense.attackInterval = 2.0f;     // 频率低（每2秒攻击）
+                    defense.attackType = "CANNON";
+                }
+
                 _defenseBuildings.push_back(defense);
             }
         }
-        };
-
-    // 创建几个防御建筑
-    createDefenseBuilding(BuildingType::ARCHER_TOWER, Vec2(400, 400));
-    createDefenseBuilding(BuildingType::CANNON, Vec2(600, 600));
-    createDefenseBuilding(BuildingType::GOLD_MINE, Vec2(800, 300));
-    createDefenseBuilding(BuildingType::ELIXIR_COLLECTOR, Vec2(300, 700));
+    }
 }
 
 void AttackScene::addHealthBarToBuilding(Architecture* building)

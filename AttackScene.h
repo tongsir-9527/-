@@ -65,7 +65,8 @@ private:
 
     // 更新防御建筑行为
     void updateDefenseBuildings(float delta);
-
+    // 添加攻击范围显示
+    void addAttackRangeToBuilding(Architecture* building);
     // 更新防御建筑攻击
     void updateDefenseAttacks(float delta);
 
