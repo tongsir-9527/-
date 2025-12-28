@@ -1,6 +1,9 @@
 #include "AttackScene.h"
 #include "Base.h"
 #include "HelloWorldScene.h"
+#include "Architecture.h"
+#include <algorithm>
+
 USING_NS_CC;
 using namespace cocos2d::ui;
 
@@ -59,6 +62,9 @@ bool AttackScene::init()
         this->addChild(backButton, 5);
     }
 
+    // 初始化攻击场景的建筑
+    initAttackBuildings();
+
     // 鼠标事件监听器（用于地图拖动和缩放）
     auto listener = EventListenerMouse::create();
     listener->onMouseScroll = CC_CALLBACK_1(AttackScene::onMouseScroll, this);
@@ -67,7 +73,223 @@ bool AttackScene::init()
     listener->onMouseUp = CC_CALLBACK_1(AttackScene::onMouseUp, this);
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
+    // 定时器用于防御建筑攻击
+    this->schedule(schedule_selector(AttackScene::updateDefenseBuildings), 0.1f);
+
     return true;
+}
+
+void AttackScene::initAttackBuildings()
+{
+    // 清空现有建筑
+    _attackBuildings.clear();
+    _defenseBuildings.clear();
+
+    // 背景中心位置
+    Vec2 centerPos = Vec2(background->getContentSize().width / 2,
+        background->getContentSize().height / 2);
+
+    // 1. 在中心放置司令部
+    Architecture* commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
+    if (commandCenter)
+    {
+        commandCenter->setPosition(centerPos);
+        background->addChild(commandCenter, 1);
+        _attackBuildings.push_back(commandCenter);
+
+        // 为司令部添加血条
+        addHealthBarToBuilding(commandCenter);
+    }
+
+    // 建筑放置的半径和角度间隔
+    float radius = 200.0f;
+    int numBuildings = 6;
+    float angleStep = 360.0f / numBuildings;
+
+    // 建筑类型列表
+    std::vector<BuildingType> buildingTypes = {
+        BuildingType::ARCHER_TOWER,    // 弓箭塔
+        BuildingType::CANNON,          // 加农炮
+        BuildingType::GOLD_MINE,       // 金矿
+        BuildingType::ELIXIR_FONT,     // 圣水罐
+        BuildingType::VAULT,           // 金库
+        BuildingType::ELIXIR_COLLECTOR // 圣水收集器
+    };
+
+    // 2. 在周围一圈放置其他建筑
+    for (int i = 0; i < numBuildings; ++i)
+    {
+        float angle = CC_DEGREES_TO_RADIANS(angleStep * i);
+        Vec2 buildingPos = centerPos + Vec2(radius * cos(angle), radius * sin(angle));
+
+        Architecture* building = Architecture::create(buildingTypes[i], 1);
+        if (building)
+        {
+            building->setPosition(buildingPos);
+            background->addChild(building, 1);
+            _attackBuildings.push_back(building);
+
+            // 为建筑添加血条
+            addHealthBarToBuilding(building);
+
+            // 为防御建筑添加攻击范围显示（仅弓箭塔和加农炮）
+            if (buildingTypes[i] == BuildingType::ARCHER_TOWER ||
+                buildingTypes[i] == BuildingType::CANNON)
+            {
+                addAttackRangeToBuilding(building);
+
+                // 初始化防御建筑属性
+                DefenseBuilding defense;
+                defense.building = building;
+                defense.lastAttackTime = 0;
+
+                // 设置防御建筑属性
+                if (buildingTypes[i] == BuildingType::ARCHER_TOWER)
+                {
+                    defense.attackRange = 250.0f;      // 弓箭塔范围大
+                    defense.attackDamage = 10.0f;      // 伤害低
+                    defense.attackInterval = 1.0f;     // 频率高（每秒攻击）
+                    defense.attackType = "ARCHER";
+                }
+                else if (buildingTypes[i] == BuildingType::CANNON)
+                {
+                    defense.attackRange = 150.0f;      // 加农炮范围小
+                    defense.attackDamage = 30.0f;      // 伤害高
+                    defense.attackInterval = 2.0f;     // 频率低（每2秒攻击）
+                    defense.attackType = "CANNON";
+                }
+
+                _defenseBuildings.push_back(defense);
+            }
+        }
+    }
+}
+
+void AttackScene::addHealthBarToBuilding(Architecture* building)
+{
+    // 创建血条背景
+    auto healthBarBg = Sprite::create("bar_bg.png");
+    if (!healthBarBg) {
+        // 如果bar_bg.png不存在，创建一个红色矩形作为血条背景
+        healthBarBg = Sprite::create();
+        healthBarBg->setColor(Color3B::BLACK);
+    }
+    healthBarBg->setScaleX(0.8f);
+    healthBarBg->setScaleY(0.3f);
+    healthBarBg->setPosition(Vec2(0, building->getContentSize().height / 2 + 15));
+    building->addChild(healthBarBg, 10);
+
+    // 创建血条前景
+    auto healthBar = ui::LoadingBar::create("bar_fg.png");
+    if (!healthBar) {
+        // 如果bar_fg.png不存在，使用默认颜色
+        healthBar = ui::LoadingBar::create();
+        healthBar->setColor(Color3B::GREEN);
+    }
+    healthBar->setScaleX(0.8f);
+    healthBar->setScaleY(0.3f);
+    healthBar->setPosition(Vec2(0, building->getContentSize().height / 2 + 15));
+    healthBar->setPercent(100.0f);
+    healthBar->setDirection(ui::LoadingBar::Direction::LEFT);
+    building->addChild(healthBar, 11);
+
+    // 存储血条引用
+    building->setUserData(healthBar);
+
+    // 存储建筑当前血量信息（使用自定义标签）
+    building->setTag(1000 + building->getHealth()); // 使用tag存储血量信息
+}
+
+void AttackScene::addAttackRangeToBuilding(Architecture* building)
+{
+    // 创建攻击范围显示（半透明圆圈）
+    float range = 0.0f;
+    Color4F rangeColor;
+
+    if (building->getType() == BuildingType::ARCHER_TOWER)
+    {
+        range = 250.0f;
+        rangeColor = Color4F(0, 1, 0, 0.2f); // 绿色半透明
+    }
+    else if (building->getType() == BuildingType::CANNON)
+    {
+        range = 150.0f;
+        rangeColor = Color4F(1, 0, 0, 0.2f); // 红色半透明
+    }
+    else
+    {
+        return; // 不是防御建筑，不添加范围显示
+    }
+
+    // 创建圆形范围显示
+    auto rangeCircle = DrawNode::create();
+    rangeCircle->drawCircle(Vec2::ZERO, range, 0, 32, false, 1.0f, 1.0f, rangeColor);
+    rangeCircle->setVisible(false); // 默认隐藏，需要时可显示
+    building->addChild(rangeCircle, -1);
+
+    // 存储范围引用到building的userData中
+    // 注意：userData只能存一个指针，我们可以使用自定义属性
+    building->setUserData(rangeCircle);
+}
+
+void AttackScene::updateDefenseBuildings(float delta)
+{
+    // 这里未来会添加军队识别和攻击逻辑
+    // 目前先更新血条显示
+
+    for (auto& building : _attackBuildings)
+    {
+        // 获取血条引用
+        ui::LoadingBar* healthBar = static_cast<ui::LoadingBar*>(building->getUserData());
+        if (healthBar)
+        {
+            float currentHealth = static_cast<float>(building->getHealth());
+            float maxHealth = static_cast<float>(building->getMaxHealth());
+            float percent = (currentHealth / maxHealth) * 100.0f;
+            healthBar->setPercent(percent);
+
+            // 根据血量改变颜色
+            if (percent > 70)
+                healthBar->setColor(Color3B::GREEN);
+            else if (percent > 30)
+                healthBar->setColor(Color3B::YELLOW);
+            else
+                healthBar->setColor(Color3B::RED);
+        }
+    }
+
+    // 更新防御建筑攻击逻辑（未来添加军队后会完善）
+    updateDefenseAttacks(delta);
+}
+
+void AttackScene::updateDefenseAttacks(float delta)
+{
+    // 暂时只更新计时，未来会添加攻击逻辑
+    for (auto& defense : _defenseBuildings)
+    {
+        defense.lastAttackTime += delta;
+
+        // 这里未来会添加检测范围内敌人的逻辑
+        // 如果检测到敌人且冷却时间结束，则进行攻击
+
+        // 伪代码示例：
+        /*
+        if (defense.lastAttackTime >= defense.attackInterval)
+        {
+            // 检测范围内的敌人
+            auto enemyInRange = findEnemyInRange(defense.building->getPosition(), defense.attackRange);
+            if (enemyInRange)
+            {
+                // 进行攻击
+                attackEnemy(enemyInRange, defense.attackDamage);
+                defense.lastAttackTime = 0;
+
+                // 显示攻击效果
+                showAttackEffect(defense.building, enemyInRange);
+            }
+        }
+        */
+    }
 }
 
 bool AttackScene::onMouseScroll(Event* event)
@@ -155,6 +377,36 @@ bool AttackScene::onMouseDown(Event* event)
         if (backButton && backButton->getBoundingBox().containsPoint(mousePos)) {
             // 按钮点击已经在addClickEventListener中处理
             return true;
+        }
+
+        // 检查是否点击了建筑（用于测试）
+        Vec2 bgMousePos = background->convertToNodeSpace(mousePos);
+        for (auto building : _attackBuildings)
+        {
+            if (building->getBoundingBox().containsPoint(bgMousePos))
+            {
+                CCLOG("点击了建筑: %d, 血量: %d/%d",
+                    (int)building->getType(),
+                    building->getHealth(),
+                    building->getMaxHealth());
+
+                // 显示/隐藏攻击范围（仅限防御建筑）
+                if (building->getType() == BuildingType::ARCHER_TOWER ||
+                    building->getType() == BuildingType::CANNON)
+                {
+                    // 搜索子节点中的DrawNode
+                    for (auto child : building->getChildren())
+                    {
+                        if (dynamic_cast<DrawNode*>(child))
+                        {
+                            bool isVisible = child->isVisible();
+                            child->setVisible(!isVisible);
+                            break;
+                        }
+                    }
+                }
+                return true;
+            }
         }
 
         isDragging = true;
