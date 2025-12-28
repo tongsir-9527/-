@@ -62,6 +62,12 @@ private:
     cocos2d::Label* _elixirLabel;     // 圣水标签
     cocos2d::LayerColor* _elixirBar; // 圣水进度条（改为LayerColor）
 
+    // 胜利/失败相关
+    bool _hasVictory;  // 是否胜利
+    bool _hasDefeat;   // 是否失败
+    bool _isGameOver;  // 游戏是否结束
+    Architecture* _commandCenter; // 指向司令部的指针
+
     bool onMouseScroll(cocos2d::Event* event);
     bool onMouseDown(cocos2d::Event* event);
     bool onMouseMove(cocos2d::Event* event);
@@ -101,6 +107,12 @@ private:
     // 添加圣水显示
     void addElixirDisplay(const cocos2d::Size& visibleSize, const cocos2d::Vec2& origin);
     void updateElixirDisplay();
+
+    // 游戏结束检查
+    void checkVictoryCondition(float delta);
+    void checkDefeatCondition(float delta);
+    void showVictoryScene();
+    void handleDefeat();
 
     // 辅助函数和消耗计算
     int getMilitaryCost(MilitaryType type) const;

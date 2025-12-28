@@ -27,7 +27,8 @@ public:
 
     // 检查是否可以建造更多的建筑
     bool canBuildMore(BuildingType type);
-
+    // 退出时清除数据
+    void onExit() override;
     CREATE_FUNC(Base);
 
 private:

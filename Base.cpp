@@ -64,20 +64,17 @@ bool Base::init()
     }
 
     _gold = 100;
+    // 修改：初始圣水设为80，并且保存在UserDefault中
     _elixir = 80;
     _maxGold = 500;    // 初始最大容量
     _maxElixir = 400;  // 初始最大容量
 
-    // 确保有初始圣水（如果游戏是第一次运行）
-    if (!UserDefault::getInstance()->getBoolForKey("game_initialized", false)) {
-        UserDefault::getInstance()->setIntegerForKey("elixir", 500);
+//初始化圣水为80并保存
+ 
+        UserDefault::getInstance()->setIntegerForKey("elixir", 80);
         UserDefault::getInstance()->setBoolForKey("game_initialized", true);
         UserDefault::getInstance()->flush();
-    }
-
-    // 从UserDefault读取圣水
-    _elixir = cocos2d::UserDefault::getInstance()->getIntegerForKey("elixir", 500);
-
+    
     _commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
     if (_commandCenter) {
         _commandCenter->setPosition(Vec2(background->getContentSize().width / 2,
@@ -168,6 +165,8 @@ void Base::createBuilding(BuildingType type)
             {
                 canBuild = true;
                 _elixir -= ELIXIR_COLLECTOR_CONSUME;
+                // 保存圣水到UserDefault
+                UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
             }
             else
             {
@@ -223,6 +222,8 @@ void Base::createBuilding(BuildingType type)
             {
                 canBuild = true;
                 _elixir -= ELIXIR_FONT_CONSUME;
+                // 保存圣水到UserDefault
+                UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
             }
             else
             {
@@ -279,9 +280,13 @@ void Base::createBuilding(BuildingType type)
             newBuilding->setResourceCallback([this](ResourceType resType, int amount) {
                 if (_elixir + amount <= _maxElixir) {
                     _elixir += amount;
+                    // 保存圣水到UserDefault
+                    UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
                 }
                 else {
                     _elixir = _maxElixir;
+                    // 保存圣水到UserDefault
+                    UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
                 }
                 CCLOG("Elixir: %d/%d", _elixir, _maxElixir);
                 });
@@ -290,7 +295,7 @@ void Base::createBuilding(BuildingType type)
         background->addChild(newBuilding, 1);
         _buildings.push_back(newBuilding);
 
-        // 如果是金库或药水井，更新存储容量
+        // 如果是金库或圣水罐，更新存储容量
         if (type == BuildingType::VAULT || type == BuildingType::ELIXIR_FONT) {
             updateStorageCapacity();
         }
@@ -459,4 +464,13 @@ int Base::calculateUpgradeCost(BuildingType type, int currentLevel)
 
     // 每升一级资源×10
     return baseCost * pow(10, currentLevel - 1);
+}
+// 退出场景时保存数据
+void Base::onExit()
+{
+    Scene::onExit();
+
+    // 保存圣水到UserDefault
+    UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
+    UserDefault::getInstance()->flush();
 }

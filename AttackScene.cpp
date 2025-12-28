@@ -33,8 +33,15 @@ bool AttackScene::init()
     _armyLabel = nullptr;
     _placingHintLabel = nullptr;
 
-    // 初始化圣水资源（从用户默认值读取或使用默认值）
-    _elixir = cocos2d::UserDefault::getInstance()->getIntegerForKey("elixir", 500);
+    //判断游戏胜利或失败
+    _hasVictory = false;
+    _hasDefeat = false;
+    _isGameOver = false;
+    _commandCenter = nullptr;
+
+    _elixir = cocos2d::UserDefault::getInstance()->getIntegerForKey("elixir", 80);
+    CCLOG("从UserDefault读取圣水: %d", _elixir);
+
     _maxElixir = 1000;  // 最大圣水容量
 
     // 创建背景
@@ -102,10 +109,11 @@ bool AttackScene::init()
     listener->onMouseUp = CC_CALLBACK_1(AttackScene::onMouseUp, this);
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
-    // 更新循环 - 每秒更新10次
     this->schedule(schedule_selector(AttackScene::updateDefenseBuildings), 0.1f);
     this->schedule(schedule_selector(AttackScene::updateDefenseAttacks), 0.1f);
     this->schedule(schedule_selector(AttackScene::updateMilitaryUnits), 0.1f);
+    this->schedule(schedule_selector(AttackScene::checkVictoryCondition), 0.5f);  // 每0.5秒检查胜利条件
+    this->schedule(schedule_selector(AttackScene::checkDefeatCondition), 0.5f);   // 每0.5秒检查失败条件
 
     // 添加放置提示标签
     _placingHintLabel = Label::createWithTTF("Click to place unit", "fonts/Marker Felt.ttf", 24);
@@ -113,16 +121,6 @@ bool AttackScene::init()
     _placingHintLabel->setColor(Color3B::YELLOW);
     _placingHintLabel->setVisible(false);
     this->addChild(_placingHintLabel, 10);
-
-    // 每5秒恢复1点圣水（模拟时间流逝）
-    this->schedule([this](float dt) {
-        if (_elixir < _maxElixir) {
-            _elixir += 1;
-            updateElixirDisplay();
-            cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
-        }
-        }, 5.0f, "elixir_recovery");
-
     return true;
 }
 
@@ -277,6 +275,7 @@ void AttackScene::initAttackBuildings()
     // 清空现有建筑
     _attackBuildings.clear();
     _defenseBuildings.clear();
+    _commandCenter = nullptr; // 重置司令部指针
 
     // 背景中心位置
     Vec2 centerPos = Vec2(background->getContentSize().width / 2,
@@ -289,6 +288,7 @@ void AttackScene::initAttackBuildings()
         commandCenter->setPosition(centerPos);
         background->addChild(commandCenter, 1);
         _attackBuildings.push_back(commandCenter);
+        _commandCenter = commandCenter; // 保存司令部指针
 
         // 为司令部添加血条
         addHealthBarToBuilding(commandCenter);
@@ -340,14 +340,14 @@ void AttackScene::initAttackBuildings()
                 // 设置防御建筑属性
                 if (buildingTypes[i] == BuildingType::ARCHER_TOWER)
                 {
-                    defense.attackRange = 250.0f;      // 弓箭塔范围大
+                    defense.attackRange = 400.0f;      // 弓箭塔范围大
                     defense.attackDamage = 10.0f;      // 伤害低
                     defense.attackInterval = 1.0f;     // 频率高（每秒攻击）
                     defense.attackType = "ARCHER";
                 }
                 else if (buildingTypes[i] == BuildingType::CANNON)
                 {
-                    defense.attackRange = 150.0f;      // 加农炮范围小
+                    defense.attackRange = 250.0f;      // 加农炮范围小
                     defense.attackDamage = 30.0f;      // 伤害高
                     defense.attackInterval = 2.0f;     // 频率低（每2秒攻击）
                     defense.attackType = "CANNON";
@@ -660,6 +660,14 @@ void AttackScene::onArmyStoreButtonClicked(cocos2d::Ref* sender)
 
 void AttackScene::onArmyUnitSelected(cocos2d::Ref* sender)
 {
+    // 游戏结束时不能选择单位
+    if (_isGameOver)
+    {
+        showMessage("游戏已结束!", Color3B::RED);
+        toggleArmyStorePanel(); // 关闭商店面板
+        return;
+    }
+
     Button* unitBtn = dynamic_cast<Button*>(sender);
     if (unitBtn)
     {
@@ -709,6 +717,13 @@ int AttackScene::getMilitaryCost(MilitaryType type) const
 
 void AttackScene::createMilitaryUnitAtPosition(const cocos2d::Vec2& position, MilitaryType type)
 {
+    // 游戏结束时不能放置单位
+    if (_isGameOver)
+    {
+        showMessage("游戏已结束!", Color3B::RED);
+        return;
+    }
+
     // 检查军队容量
     if (_currentArmyCount >= _armyCapacity) {
         showMessage("军队容量已满!", Color3B::RED);
@@ -772,6 +787,13 @@ void AttackScene::showMessage(const std::string& message, const cocos2d::Color3B
 
 void AttackScene::menuBackCallback(cocos2d::Ref* pSender)
 {
+    // 如果游戏已经胜利，禁止返回
+    if (_hasVictory)
+    {
+        showMessage("游戏胜利! 请点击退出游戏", Color3B::GREEN);
+        return;
+    }
+
     // 保存当前圣水到用户默认值
     cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
     cocos2d::UserDefault::getInstance()->flush();
@@ -917,4 +939,162 @@ std::string AttackScene::getMilitaryTypeName(MilitaryType type)
         case MilitaryType::BOMBER: return "Bomber";
         default: return "Unknown";
     }
+}
+
+// 检查胜利条件：司令部被摧毁
+void AttackScene::checkVictoryCondition(float delta)
+{
+    if (_isGameOver || _hasVictory) return;
+
+    // 检查司令部是否被摧毁
+    if (_commandCenter && _commandCenter->getHealth() <= 0)
+    {
+        _hasVictory = true;
+        _isGameOver = true;
+
+        // 停止所有更新
+        this->unscheduleAllCallbacks();
+
+        // 延迟显示胜利场景，给摧毁动画时间
+        this->runAction(Sequence::create(
+            DelayTime::create(1.0f),
+            CallFunc::create([this]() {
+                this->showVictoryScene();
+                }),
+            nullptr
+        ));
+    }
+}
+
+// 检查失败条件
+void AttackScene::checkDefeatCondition(float delta)
+{
+    if (_isGameOver || _hasDefeat) return;
+
+    bool hasAliveUnits = false;
+
+    // 检查是否有存活的军队单位
+    for (auto unit : _militaryUnits)
+    {
+        if (unit->isAlive())
+        {
+            hasAliveUnits = true;
+            break;
+        }
+    }
+
+    // 条件1：没有存活的军队单位，且圣水不足以放置最便宜的单位
+    if (!hasAliveUnits)
+    {
+        int cheapestCost = BARBARIAN_COST; // 假设野蛮人是最便宜的
+
+        // 条件1a：圣水不足以放置任何单位
+        bool cannotAffordAnyUnit = (_elixir < cheapestCost);
+
+        // 条件1b：军队容量已满且所有单位都死亡
+        bool allUnitsDeadAtCapacity = (_currentArmyCount >= _armyCapacity && _militaryUnits.empty());
+
+        if (cannotAffordAnyUnit || allUnitsDeadAtCapacity)
+        {
+            _hasDefeat = true;
+            _isGameOver = true;
+
+            // 停止所有更新
+            this->unscheduleAllCallbacks();
+
+            // 延迟处理失败，给单位死亡动画时间
+            this->runAction(Sequence::create(
+                DelayTime::create(1.0f),
+                CallFunc::create([this]() {
+                    this->handleDefeat();
+                    }),
+                nullptr
+            ));
+        }
+    }
+}
+
+// 显示胜利场景
+// 在showVictoryScene()函数中，添加圣水重置：
+void AttackScene::showVictoryScene()
+{
+    auto visibleSize = Director::getInstance()->getVisibleSize();
+    Vec2 origin = Director::getInstance()->getVisibleOrigin();
+
+    // 创建胜利层（覆盖整个屏幕）
+    auto victoryLayer = LayerColor::create(Color4B(0, 0, 0, 200), visibleSize.width, visibleSize.height);
+    victoryLayer->setPosition(origin);
+    victoryLayer->setTag(9999); // 使用tag便于后续操作
+    this->addChild(victoryLayer, 10000);
+
+    // 显示"Victory"文字
+    auto victoryLabel = Label::createWithTTF("VICTORY!", "fonts/Marker Felt.ttf", 72);
+    victoryLabel->setPosition(Vec2(visibleSize.width / 2 + origin.x,
+        visibleSize.height / 2 + origin.y + 100));
+    victoryLabel->setColor(Color3B::GREEN);
+    victoryLabel->enableGlow(Color4B::YELLOW);
+    victoryLayer->addChild(victoryLabel);
+
+    // 添加退出游戏按钮
+    auto exitButton = ui::Button::create("CloseNormal.png", "CloseSelected.png");
+    if (exitButton)
+    {
+        exitButton->setTitleText("Close");
+        exitButton->setTitleFontSize(36);
+        exitButton->setPosition(Vec2(visibleSize.width / 2 + origin.x,
+            visibleSize.height / 2 + origin.y - 50));
+        exitButton->addClickEventListener([this](Ref* sender) {
+            // 退出游戏前保存当前圣水状态
+            cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
+            cocos2d::UserDefault::getInstance()->flush();
+
+            // 退出游戏
+            Director::getInstance()->end();
+
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS)
+            exit(0);
+#endif
+            });
+        victoryLayer->addChild(exitButton);
+    }
+
+    // 添加庆祝效果
+    victoryLabel->runAction(RepeatForever::create(
+        Sequence::create(
+            ScaleTo::create(0.5f, 1.2f),
+            ScaleTo::create(0.5f, 1.0f),
+            nullptr
+        )
+    ));
+
+    // 保存圣水状态
+    cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
+    cocos2d::UserDefault::getInstance()->flush();
+
+    CCLOG("Victory! Command Center destroyed.");
+}
+
+void AttackScene::handleDefeat()
+{
+    // 显示失败消息
+    showMessage("DEFEAT! All units destroyed.", Color3B::RED);
+
+    // 保存圣水状态
+    cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
+    cocos2d::UserDefault::getInstance()->flush();
+
+    // 延迟返回base场景
+    this->runAction(Sequence::create(
+        DelayTime::create(2.0f),
+        CallFunc::create([this]() {
+            auto baseScene = Base::createScene();
+            if (baseScene)
+            {
+                Director::getInstance()->replaceScene(TransitionFade::create(0.5f, baseScene));
+            }
+            }),
+        nullptr
+    ));
+
+    CCLOG("Defeat! All military units destroyed.");
 }
