@@ -68,6 +68,16 @@ bool Base::init()
     _maxGold = 500;    // 初始最大容量
     _maxElixir = 400;  // 初始最大容量
 
+    // 确保有初始圣水（如果游戏是第一次运行）
+    if (!UserDefault::getInstance()->getBoolForKey("game_initialized", false)) {
+        UserDefault::getInstance()->setIntegerForKey("elixir", 500);
+        UserDefault::getInstance()->setBoolForKey("game_initialized", true);
+        UserDefault::getInstance()->flush();
+    }
+
+    // 从UserDefault读取圣水
+    _elixir = cocos2d::UserDefault::getInstance()->getIntegerForKey("elixir", 500);
+
     _commandCenter = Architecture::create(BuildingType::COMMAND_CENTER, 1);
     if (_commandCenter) {
         _commandCenter->setPosition(Vec2(background->getContentSize().width / 2,

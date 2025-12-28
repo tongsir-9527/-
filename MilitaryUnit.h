@@ -4,13 +4,19 @@
 #include "cocos2d.h"
 #include "Architecture.h"
 
-// 濂勦濬倰繹撼
+// 军事单位类型
 enum class MilitaryType {
     BOMBER,
     ARCHER,
     BARBARIAN,
     GIANT,
 };
+
+// 军事单位消耗常量
+static const int BARBARIAN_COST = 10;   // 野蛮人消耗
+static const int ARCHER_COST = 20;      // 弓箭手消耗
+static const int GIANT_COST = 50;       // 巨人消耗
+static const int BOMBER_COST = 30;      // 炸弹人消耗
 
 class MilitaryUnit : public cocos2d::Sprite
 {

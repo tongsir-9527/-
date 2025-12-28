@@ -21,10 +21,10 @@ private:
     cocos2d::Vec2 lastMousePos;
     cocos2d::Vec2 backgroundPos;
 
-    // 馴僻源膘耟
+    // 攻击建筑
     std::vector<Architecture*> _attackBuildings;
 
-    // 滅郘源膘耟
+    // 防御建筑
     struct DefenseBuilding {
         Architecture* building;
         float attackRange;
@@ -35,10 +35,10 @@ private:
     };
     std::vector<DefenseBuilding> _defenseBuildings;
 
-    // 濂勦等弇
+    // 军事单位
     std::vector<MilitaryUnit*> _militaryUnits;
 
-    // 濂勦妀虛眈壽
+    // 军队商店相关
     cocos2d::ui::Button* _armyStoreButton;
     cocos2d::Layer* _armyStorePanel;
     cocos2d::ui::ScrollView* _armyScrollView;
@@ -46,15 +46,21 @@ private:
     MilitaryUnit* _draggingUnit;
     cocos2d::Vec2 _unitDragOffset;
 
-    // 訧埭珆尨
+    // 军队容量
     int _armyCapacity;
     int _currentArmyCount;
     cocos2d::Label* _armyLabel;
 
-    // 濂勦傖賤
+    // 军队放置
     bool _isPlacingUnit;
     MilitaryType _selectedUnitType;
     cocos2d::Label* _placingHintLabel;
+
+    // 圣水资源
+    int _elixir;              // 当前圣水资源
+    int _maxElixir;           // 最大圣水容量
+    cocos2d::Label* _elixirLabel;     // 圣水标签
+    cocos2d::LayerColor* _elixirBar; // 圣水进度条（改为LayerColor）
 
     bool onMouseScroll(cocos2d::Event* event);
     bool onMouseDown(cocos2d::Event* event);
@@ -62,37 +68,45 @@ private:
     bool onMouseUp(cocos2d::Event* event);
     void constrainBackgroundPosition();
 
-    // 場宎趙馴僻源膘耟
+    // 初始化攻击建筑
     void initAttackBuildings();
 
-    // 峈膘耟氝樓悛沭
+    // 为建筑添加血条
     void addHealthBarToBuilding(Architecture* building);
 
-    // 氝樓馴僻毓峓珆尨
+    // 添加防御建筑攻击范围
     void addAttackRangeToBuilding(Architecture* building);
 
-    // 載陔滅郘膘耟俴峈
+    // 更新防御建筑血量
     void updateDefenseBuildings(float delta);
-    // 載陔滅郘膘耟馴僻
+    // 更新防御建筑攻击
     void updateDefenseAttacks(float delta);
-    // 載陔濂勦等弇
+    // 更新军事单位
     void updateMilitaryUnits(float delta);
 
-    // 濂勦妀虛髡夔
+    // 军队商店初始化
     void initArmyStore();
     void toggleArmyStorePanel();
     void onArmyStoreButtonClicked(cocos2d::Ref* sender);
     void onArmyUnitSelected(cocos2d::Ref* sender);
     void createMilitaryUnitAtPosition(const cocos2d::Vec2& position, MilitaryType type);
 
-    // 殿隙價華偌聽
+    // 返回菜单回调
     void menuBackCallback(cocos2d::Ref* pSender);
 
-    // 氝樓濂勦珆尨
+    // 添加军队显示
     void addArmyDisplay(const cocos2d::Size& visibleSize, const cocos2d::Vec2& origin);
     void updateArmyDisplay();
 
-    // 鳳龰濂勦濬倰靡備ㄗ噙怓落翑滲杅ㄘ
+    // 添加圣水显示
+    void addElixirDisplay(const cocos2d::Size& visibleSize, const cocos2d::Vec2& origin);
+    void updateElixirDisplay();
+
+    // 辅助函数和消耗计算
+    int getMilitaryCost(MilitaryType type) const;
+    void showMessage(const std::string& message, const cocos2d::Color3B& color);
+
+    // 获取军事单位名称（静态方法）
     static std::string getMilitaryTypeName(MilitaryType type);
 };
 

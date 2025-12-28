@@ -132,11 +132,11 @@ bool MouseEvent::onMouseDown(Event* event)
     Vec2 mousePos = _baseScene->convertToNodeSpace(Vec2(e->getCursorX(), e->getCursorY()));
 
     if (_upgradeButton && _upgradeButton->getBoundingBox().containsPoint(mousePos)) {
-        return true; // 优先处理升级按钮
+        return true; // 防止误触升级按钮
     }
 
     if (_cancelButton && _cancelButton->getBoundingBox().containsPoint(mousePos)) {
-        return true; // 优先处理取消按钮
+        return true; // 防止误触取消按钮
     }
 
     // 检查返回按钮
@@ -463,6 +463,13 @@ bool MouseEvent::canBuildMore(BuildingType type)
 void MouseEvent::menuBackCallback(Ref* pSender)
 {
     CCLOG("返回按钮被点击");
+
+    // 保存当前圣水到用户默认值
+    if (_elixir) {
+        UserDefault::getInstance()->setIntegerForKey("elixir", *_elixir);
+        UserDefault::getInstance()->flush();
+    }
+
     auto helloWorldScene = HelloWorld::createScene();
     if (helloWorldScene)
     {

@@ -33,6 +33,10 @@ bool AttackScene::init()
     _armyLabel = nullptr;
     _placingHintLabel = nullptr;
 
+    // 初始化圣水资源（从用户默认值读取或使用默认值）
+    _elixir = cocos2d::UserDefault::getInstance()->getIntegerForKey("elixir", 500);
+    _maxElixir = 1000;  // 最大圣水容量
+
     // 创建背景
     background = Sprite::create("attack_background.png");
     if (!background)
@@ -87,6 +91,9 @@ bool AttackScene::init()
     // 添加军队数量显示
     addArmyDisplay(visibleSize, origin);
 
+    // 添加圣水显示
+    addElixirDisplay(visibleSize, origin);
+
     // 鼠标事件监听器
     auto listener = EventListenerMouse::create();
     listener->onMouseScroll = CC_CALLBACK_1(AttackScene::onMouseScroll, this);
@@ -106,6 +113,15 @@ bool AttackScene::init()
     _placingHintLabel->setColor(Color3B::YELLOW);
     _placingHintLabel->setVisible(false);
     this->addChild(_placingHintLabel, 10);
+
+    // 每5秒恢复1点圣水（模拟时间流逝）
+    this->schedule([this](float dt) {
+        if (_elixir < _maxElixir) {
+            _elixir += 1;
+            updateElixirDisplay();
+            cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
+        }
+        }, 5.0f, "elixir_recovery");
 
     return true;
 }
@@ -364,13 +380,13 @@ void AttackScene::addAttackRangeToBuilding(Architecture* building)
 
     if (building->getType() == BuildingType::ARCHER_TOWER)
     {
-        range = 250.0f;
+        range = 400.0f;
         // 使用与绿色对比度强的紫色
         rangeColor = Color4F(0.8f, 0.0f, 0.8f, 0.3f); // 紫色半透明
     }
     else if (building->getType() == BuildingType::CANNON)
     {
-        range = 150.0f;
+        range = 250.0f;
         // 使用与绿色对比度强的橙色
         rangeColor = Color4F(1.0f, 0.5f, 0.0f, 0.3f); // 橙色半透明
     }
@@ -597,6 +613,15 @@ void AttackScene::initArmyStore()
         unitName->setColor(Color3B::WHITE);
         contentLayer->addChild(unitName);
 
+        // 添加单位消耗标签
+        int unitCost = getMilitaryCost(armyUnits[i].first);
+        auto unitCostLabel = Label::createWithTTF(std::to_string(unitCost) + " 圣水",
+            "fonts/Marker Felt.ttf", 14);
+        unitCostLabel->setPosition(Vec2(unitBtn->getPositionX(),
+            unitBtn->getPositionY() - unitIconSize / 2 - 30));
+        unitCostLabel->setColor(Color3B::BLUE);
+        contentLayer->addChild(unitCostLabel);
+
         contentLayer->addChild(unitBtn);
     }
 
@@ -642,22 +667,14 @@ void AttackScene::onArmyUnitSelected(cocos2d::Ref* sender)
 
         // 检查军队容量
         if (_currentArmyCount >= _armyCapacity) {
-            auto visibleSize = Director::getInstance()->getVisibleSize();
-            auto origin = Director::getInstance()->getVisibleOrigin();
+            showMessage("军队容量已满!", Color3B::RED);
+            return;
+        }
 
-            auto label = Label::createWithTTF("Army capacity is full!", "fonts/Marker Felt.ttf", 36);
-            label->setPosition(Vec2(origin.x + visibleSize.width / 2,
-                origin.y + visibleSize.height / 2));
-            label->setColor(Color3B::RED);
-            this->addChild(label, 1000);
-
-            label->runAction(Sequence::create(
-                DelayTime::create(2.0f),
-                FadeOut::create(0.5f),
-                RemoveSelf::create(),
-                nullptr
-            ));
-
+        // 检查圣水是否足够
+        int cost = getMilitaryCost(selectedType);
+        if (_elixir < cost) {
+            showMessage("圣水不足! 需要 " + std::to_string(cost) + " 圣水", Color3B::RED);
             return;
         }
 
@@ -668,14 +685,50 @@ void AttackScene::onArmyUnitSelected(cocos2d::Ref* sender)
         _isPlacingUnit = true;
         _selectedUnitType = selectedType;
         _placingHintLabel->setVisible(true);
-        _placingHintLabel->setString("Click to place " + getMilitaryTypeName(_selectedUnitType));
 
-        CCLOG("Selected unit type: %s, waiting for placement", getMilitaryTypeName(_selectedUnitType).c_str());
+        // 显示消耗信息
+        std::string hint = "点击放置 " + getMilitaryTypeName(_selectedUnitType) +
+            " (消耗 " + std::to_string(cost) + " 圣水)";
+        _placingHintLabel->setString(hint);
+
+        CCLOG("Selected unit type: %s, cost %d elixir, waiting for placement",
+            getMilitaryTypeName(_selectedUnitType).c_str(), cost);
+    }
+}
+
+int AttackScene::getMilitaryCost(MilitaryType type) const
+{
+    switch (type) {
+        case MilitaryType::BARBARIAN: return BARBARIAN_COST;
+        case MilitaryType::ARCHER: return ARCHER_COST;
+        case MilitaryType::GIANT: return GIANT_COST;
+        case MilitaryType::BOMBER: return BOMBER_COST;
+        default: return 0;
     }
 }
 
 void AttackScene::createMilitaryUnitAtPosition(const cocos2d::Vec2& position, MilitaryType type)
 {
+    // 检查军队容量
+    if (_currentArmyCount >= _armyCapacity) {
+        showMessage("军队容量已满!", Color3B::RED);
+        return;
+    }
+
+    // 检查圣水是否足够
+    int cost = getMilitaryCost(type);
+    if (_elixir < cost) {
+        showMessage("圣水不足! 消耗 " + std::to_string(cost) + " 圣水", Color3B::RED);
+        return;
+    }
+
+    // 扣除圣水
+    _elixir -= cost;
+    updateElixirDisplay();
+
+    // 保存圣水到用户默认值
+    cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
+
     // 创建军队单位
     auto unit = MilitaryUnit::create(type);
     if (unit)
@@ -690,12 +743,39 @@ void AttackScene::createMilitaryUnitAtPosition(const cocos2d::Vec2& position, Mi
         _currentArmyCount++;
         updateArmyDisplay();
 
-        CCLOG("Created %s at position (%f, %f)", getMilitaryTypeName(type).c_str(), bgPos.x, bgPos.y);
+        // 显示消耗信息
+        std::string costMsg = "消耗 " + std::to_string(cost) + " 圣水";
+        showMessage(costMsg, Color3B::GREEN);
+
+        CCLOG("Created %s at position (%f, %f), cost %d elixir", getMilitaryTypeName(type).c_str(), bgPos.x, bgPos.y, cost);
     }
+}
+
+void AttackScene::showMessage(const std::string& message, const cocos2d::Color3B& color)
+{
+    auto visibleSize = Director::getInstance()->getVisibleSize();
+    auto origin = Director::getInstance()->getVisibleOrigin();
+
+    auto label = Label::createWithTTF(message, "fonts/Marker Felt.ttf", 36);
+    label->setPosition(Vec2(origin.x + visibleSize.width / 2,
+        origin.y + visibleSize.height / 2));
+    label->setColor(color);
+    this->addChild(label, 1000);
+
+    label->runAction(Sequence::create(
+        DelayTime::create(2.0f),
+        FadeOut::create(0.5f),
+        RemoveSelf::create(),
+        nullptr
+    ));
 }
 
 void AttackScene::menuBackCallback(cocos2d::Ref* pSender)
 {
+    // 保存当前圣水到用户默认值
+    cocos2d::UserDefault::getInstance()->setIntegerForKey("elixir", _elixir);
+    cocos2d::UserDefault::getInstance()->flush();
+
     auto baseScene = Base::createScene();
     if (baseScene)
     {
@@ -752,6 +832,79 @@ void AttackScene::updateArmyDisplay()
 {
     if (_armyLabel) {
         _armyLabel->setString(std::to_string(_currentArmyCount) + "/" + std::to_string(_armyCapacity));
+    }
+}
+
+void AttackScene::addElixirDisplay(const Size& visibleSize, const Vec2& origin)
+{
+    // 创建圣水显示容器
+    auto container = Node::create();
+    container->setPosition(Vec2(origin.x + visibleSize.width - 200,
+        origin.y + visibleSize.height - 120));  // 放在军队显示下方
+    this->addChild(container, 10);
+
+    // 圣水图标
+    auto elixirIcon = Sprite::create("Elixir.png");
+    if (!elixirIcon) {
+        // 备用图标
+        elixirIcon = Sprite::create();
+        auto placeholder = LayerColor::create(Color4B(0, 0, 255, 255), 30, 30);
+        elixirIcon->addChild(placeholder);
+    }
+    else {
+        elixirIcon->setScale(0.5f);
+    }
+
+    if (elixirIcon) {
+        elixirIcon->setPosition(Vec2(0, 0));
+        container->addChild(elixirIcon);
+    }
+
+    // 圣水标签
+    _elixirLabel = Label::createWithTTF(std::to_string(_elixir) + "/" + std::to_string(_maxElixir),
+        "fonts/Marker Felt.ttf", 20);
+    _elixirLabel->setColor(Color3B::BLUE);
+    _elixirLabel->setPosition(Vec2(30, 0));  // 图标右侧
+    container->addChild(_elixirLabel);
+
+    // 圣水进度条背景
+    const float barWidth = 150.0f;
+    const float barHeight = 15.0f;
+
+    auto barBg = LayerColor::create(Color4B(100, 100, 100, 255), barWidth, barHeight);
+    barBg->setPosition(Vec2(0, -20));  // 标签下方
+    container->addChild(barBg);
+
+    // 圣水进度条
+    _elixirBar = LayerColor::create(Color4B(100, 100, 255, 255), barWidth, barHeight);
+    _elixirBar->setPosition(Vec2(0, -20));
+    container->addChild(_elixirBar);
+
+    // 初始更新
+    updateElixirDisplay();
+}
+
+void AttackScene::updateElixirDisplay()
+{
+    if (_elixirLabel) {
+        _elixirLabel->setString(std::to_string(_elixir) + "/" + std::to_string(_maxElixir));
+    }
+
+    if (_elixirBar) {
+        float percent = static_cast<float>(_elixir) / _maxElixir;
+        float newWidth = 150.0f * percent;
+        _elixirBar->setContentSize(Size(newWidth, 15));
+
+        // 根据圣水量改变颜色
+        if (percent < 0.3f) {
+            _elixirBar->setColor(Color3B(255, 0, 0));  // 红色，圣水不足
+        }
+        else if (percent < 0.6f) {
+            _elixirBar->setColor(Color3B(255, 255, 0));  // 黄色，圣水中等
+        }
+        else {
+            _elixirBar->setColor(Color3B(0, 255, 0));  // 绿色，圣水充足
+        }
     }
 }
 

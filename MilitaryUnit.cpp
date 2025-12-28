@@ -74,28 +74,28 @@ void MilitaryUnit::initPropertiesByType() {
         case MilitaryType::BOMBER:
             _maxHealth = 50;
             _attackDamage = 30;
-            _attackRange = 150.0f;
+            _attackRange = 50.0f;
             _attackCooldown = 2.0f;
             _moveSpeed = 80.0f; // 移动速度
             break;
         case MilitaryType::ARCHER:
             _maxHealth = 40;
             _attackDamage = 15;
-            _attackRange = 300.0f;
+            _attackRange = 90.0f;
             _attackCooldown = 1.5f;
             _moveSpeed = 100.0f;
             break;
         case MilitaryType::BARBARIAN:
             _maxHealth = 80;
             _attackDamage = 20;
-            _attackRange = 100.0f;
+            _attackRange = 20.0f;
             _attackCooldown = 1.0f;
             _moveSpeed = 120.0f;
             break;
         case MilitaryType::GIANT:
             _maxHealth = 200;
             _attackDamage = 25;
-            _attackRange = 120.0f;
+            _attackRange = 30.0f;
             _attackCooldown = 2.5f;
             _moveSpeed = 60.0f;
             break;
