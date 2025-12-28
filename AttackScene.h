@@ -51,6 +51,11 @@ private:
     int _currentArmyCount;
     cocos2d::Label* _armyLabel;
 
+    // 濂勦傖賤
+    bool _isPlacingUnit;
+    MilitaryType _selectedUnitType;
+    cocos2d::Label* _placingHintLabel;
+
     bool onMouseScroll(cocos2d::Event* event);
     bool onMouseDown(cocos2d::Event* event);
     bool onMouseMove(cocos2d::Event* event);
@@ -63,10 +68,11 @@ private:
     // 峈膘耟氝樓悛沭
     void addHealthBarToBuilding(Architecture* building);
 
-    // 載陔滅郘膘耟俴峈
-    void updateDefenseBuildings(float delta);
     // 氝樓馴僻毓峓珆尨
     void addAttackRangeToBuilding(Architecture* building);
+
+    // 載陔滅郘膘耟俴峈
+    void updateDefenseBuildings(float delta);
     // 載陔滅郘膘耟馴僻
     void updateDefenseAttacks(float delta);
     // 載陔濂勦等弇
@@ -77,7 +83,7 @@ private:
     void toggleArmyStorePanel();
     void onArmyStoreButtonClicked(cocos2d::Ref* sender);
     void onArmyUnitSelected(cocos2d::Ref* sender);
-    void createMilitaryUnit(MilitaryType type);
+    void createMilitaryUnitAtPosition(const cocos2d::Vec2& position, MilitaryType type);
 
     // 殿隙價華偌聽
     void menuBackCallback(cocos2d::Ref* pSender);

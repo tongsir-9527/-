@@ -103,19 +103,35 @@ void MilitaryUnit::initPropertiesByType() {
     _health = _maxHealth;
 }
 
-BuildingType MilitaryUnit::getPreferredTarget() const {
-    switch (_type) {
-        case MilitaryType::BOMBER:
-            return BuildingType::ARCHER_TOWER; // 炸弹人优先攻击防御建筑
-        case MilitaryType::ARCHER:
-            return BuildingType::COMMAND_CENTER; // 弓箭手优先攻击司令部
-        case MilitaryType::BARBARIAN:
-            return BuildingType::GOLD_MINE; // 野蛮人优先攻击资源建筑
-        case MilitaryType::GIANT:
-            return BuildingType::CANNON; // 巨人优先攻击防御建筑
-        default:
-            return BuildingType::COMMAND_CENTER;
+Architecture* MilitaryUnit::findNearestBuilding(const std::vector<Architecture*>& buildings) {
+    Architecture* nearest = nullptr;
+    float minDistance = FLT_MAX;
+
+    for (auto building : buildings) {
+        if (building->getHealth() <= 0) continue;
+
+        float distance = this->getPosition().distance(building->getPosition());
+        if (distance < minDistance) {
+            minDistance = distance;
+            nearest = building;
+        }
     }
+
+    return nearest;
+}
+
+Architecture* MilitaryUnit::findCommandCenter(const std::vector<Architecture*>& buildings) {
+    // 先寻找司令部
+    for (auto building : buildings) {
+        if (building->getHealth() <= 0) continue;
+
+        if (building->getType() == BuildingType::COMMAND_CENTER) {
+            return building;
+        }
+    }
+
+    // 如果没有司令部，则寻找最近的建筑
+    return findNearestBuilding(buildings);
 }
 
 void MilitaryUnit::update(float delta) {
@@ -140,6 +156,7 @@ void MilitaryUnit::update(float delta) {
     else {
         // 没有目标或目标已死亡，停止攻击
         _isAttacking = false;
+        _attackTarget = nullptr;
     }
 }
 
@@ -167,15 +184,13 @@ void MilitaryUnit::attackTarget(float delta) {
 
     if (_attackTimer >= _attackCooldown) {
         // 攻击冷却完成，对建筑造成伤害
-        // 注意：这里需要Architecture类有takeDamage方法
-        // 暂时使用直接减少血量，后续需要在Architecture中添加takeDamage方法
         int currentHealth = _attackTarget->getHealth();
         _attackTarget->setHealth(currentHealth - _attackDamage);
 
         // 重置攻击计时器
         _attackTimer = 0.0f;
 
-        // 显示攻击效果（可以添加粒子效果或动画）
+        // 显示攻击效果
         CCLOG("Military unit attacks building for %d damage!", _attackDamage);
 
         // 如果建筑被摧毁

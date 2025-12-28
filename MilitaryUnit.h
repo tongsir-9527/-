@@ -28,8 +28,11 @@ public:
     void setAttackTarget(Architecture* target) { _attackTarget = target; }
     Architecture* getAttackTarget() const { return _attackTarget; }
 
-    // 设置攻击优先级
-    BuildingType getPreferredTarget() const;
+    // 寻找最近的建筑作为目标
+    Architecture* findNearestBuilding(const std::vector<Architecture*>& buildings);
+
+    // 巨人寻找司令部作为目标
+    Architecture* findCommandCenter(const std::vector<Architecture*>& buildings);
 
     // 移动到目标
     void moveToTarget(float delta);
